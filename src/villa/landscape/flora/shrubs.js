@@ -89,10 +89,10 @@ export function makeCascade(seed, len, flavour = 'mix') {
     cards.push({ p: V(x + (rng() - 0.5) * 0.2, 0.15, 0.22 + rng() * 0.1), axis: V(0, -1, 0.25).normalize(), face: V(0, 0.2, 1), w: s * 0.9, h: s * 0.6, cell: 'ivy', clump: V(x, -0.2, -0.3), roll: (rng() - 0.5) * 0.4, bend: 0.4, rnd: rng() });
   }
   // hanging strands
-  const ns = 3 + Math.floor(rng() * 4);
+  const ns = 4 + Math.floor(rng() * 4);
   for (let i = 0; i < ns; i++) {
     const x = (rng() - 0.5) * W * 0.9;
-    const L = len * (0.45 + rng() * 0.55);
+    const L = len * (0.6 + rng() * 0.4);
     const w = 0.42 + rng() * 0.3;
     const z = 0.18 + rng() * 0.16;
     const yaw = (rng() - 0.5) * 0.7;

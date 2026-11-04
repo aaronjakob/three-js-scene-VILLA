@@ -272,9 +272,10 @@ export function buildVegetation(ctx) {
     // small multi-stem olives and a few larger ones
     for (const [x, y, s] of [[-12.5, 2.5, 0.85], [6.5, 4.5, 0.95], [12.0, -3.5, 0.8], [-15.5, -3.2, 0.7], [1.5, -6.5, 0.7], [-8.5, 7.5, 0.6], [14.5, 3.0, 0.62], [-2.0, 8.6, 0.58]]) placeTree('olive', x, y, zr, s, 0);
     // lush band along the roof edge (spills over in the photos)
-    for (const p of resample([...offset(roof, -0.95), offset(roof, -0.95)[0]], 0.6)) {
+    for (const p of resample([...offset(roof, -0.95), offset(roof, -0.95)[0]], 0.55)) {
       if (p.y > 10) continue;
-      placeShrub(rng() < 0.4 ? 'cushion' : rng() < 0.5 ? 'myrtle' : 'grassA', p.x, p.y, zr, 0.8 + rng() * 0.5);
+      const q = rng();
+      placeShrub(q < 0.3 ? 'cushion' : q < 0.55 ? 'myrtle' : q < 0.75 ? 'broad' : q < 0.88 ? 'grassA' : 'lavender', p.x, p.y, zr, 0.95 + rng() * 0.55);
     }
     // taller evergreen masses and multi-stem trees a little further in, so the
     // garden reads over the slab edge from the terraces and the entry court
@@ -298,7 +299,8 @@ export function buildVegetation(ctx) {
     for (const p of resample([...strip, strip[0]], 0.7)) {
       if (pointInPoly(p.x, p.y, offset(upper, 1.0))) continue;
       if (p.y > 9) continue;
-      placeShrub(['cushion', 'ivy', 'grassB', 'myrtle', 'lavender'][Math.floor(rng() * 5)], p.x, p.y, LEVEL.upper, 0.45 + rng() * 0.35);
+      const k = ['cushion', 'myrtle', 'grassA', 'myrtle', 'lavender', 'broad', 'cushion'][Math.floor(rng() * 7)];
+      placeShrub(k, p.x, p.y, LEVEL.upper, (k === 'cushion' ? 1.0 : 0.7) + rng() * 0.4);
     }
   }
 
@@ -316,22 +318,29 @@ export function buildVegetation(ctx) {
       if (cluster < thresh) continue;
       const t = new THREE.Vector2().subVectors(q, p).normalize();
       const out = new THREE.Vector2(t.y, -t.x);
-      const vi = Math.floor(rng() * set.length);
-      const x = p.x + out.x * (inset + rng() * 0.1);
-      const y = p.y + out.y * (inset + rng() * 0.1);
-      // local +z (outward) -> plan outward normal (three: x, -y)
-      const yaw = Math.atan2(out.x, -out.y) + (rng() - 0.5) * 0.3;
-      const m = new THREE.Matrix4().compose(
-        new THREE.Vector3(x, z, -y),
-        new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
-        new THREE.Vector3(0.9 + rng() * 0.3, 0.75 + rng() * 0.5 + Math.max(0, cluster - 0.3), 1),
-      );
-      const g = 0.92 + rng() * 0.16;
-      push(`${keyPrefix}-${vi}`, set[vi], leafMat, m, new THREE.Color(g, g * (0.98 + rng() * 0.06), g * (0.9 + rng() * 0.1)), false, true);
+      // clustered: 1-3 overlapping cascades per edge point where the field is high
+      const nC = 1 + Math.floor(Math.max(0, cluster - thresh) * 6 * rng() + rng() * 1.2);
+      for (let c = 0; c < nC; c++) {
+        const vi = Math.floor(rng() * set.length);
+        const along = (rng() - 0.5) * step;
+        const x = p.x + out.x * (inset + rng() * 0.1) + t.x * along;
+        const y = p.y + out.y * (inset + rng() * 0.1) + t.y * along;
+        // local +z (outward) -> plan outward normal (three: x, -y)
+        const yaw = Math.atan2(out.x, -out.y) + (rng() - 0.5) * 0.3;
+        const m = new THREE.Matrix4().compose(
+          new THREE.Vector3(x, z, -y),
+          new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
+          new THREE.Vector3(1.0 + rng() * 0.4, (0.85 + rng() * 0.55 + Math.max(0, cluster - 0.2)) * lenK, 1),
+        );
+        const g = 0.92 + rng() * 0.16;
+        push(`${keyPrefix}-${vi}`, set[vi], leafMat, m, new THREE.Color(g, g * (0.98 + rng() * 0.06), g * (0.9 + rng() * 0.1)), false, true);
+      }
     }
   };
-  vineAlong(l1, LEVEL.upper + 0.12, 0.05, 0.6, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11), cascades, 'casc');
-  vineAlong(roof, LEVEL.roof + 0.2, 0.05, 0.55, (p) => p.y > 3.5, cascades, 'casc');
+  let lenK = 1.15;
+  vineAlong(l1, LEVEL.upper + 0.12, 0.05, 0.55, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11), cascades, 'casc', -0.08);
+  vineAlong(roof, LEVEL.roof + 0.2, 0.05, 0.5, (p) => p.y > 3.5, cascades, 'casc', -0.08);
+  lenK = 1;
   // into the atrium (seen from the living room)
   const shaftRing = ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.04, ATRIUM.ry - 0.04, 64, ATRIUM.rot)).reverse();
   vineAlong(shaftRing, LEVEL.upper - 0.6, -0.05, 0.55, null, cascShort, 'cascS', 0.0);
