@@ -34,7 +34,7 @@ geometry is authored in GLB plan coordinates (`src/villa/architecture/plan.js`).
 ## Decisions where references conflict
 
 1. **Sun position.** Manifest: "subtle pale yellow sunset over sea toward southeast". Kept literally
-   (azimuth 146°, elevation 6.5°) even though photos put the sun wherever the camera looks. Result: the
+   (azimuth 146°, elevation 5.5°) even though photos put the sun wherever the camera looks. Result: the
    sun is in frame only for south/south‑east‑facing views (interior hero, exterior hero, workspace).
 2. **Waterfall side.** Several photos show the waterfall at the image centre/right under the pool.
    It is fixed at the west tip per manifest; it never moves between views.
@@ -59,6 +59,21 @@ geometry is authored in GLB plan coordinates (`src/villa/architecture/plan.js`).
    its rooms are not furnished (not part of any brief).
 10. **Atrium.** "One oval roof/atrium opening": one shaft through L1 and the roof with a glass drum at
     the upper level and frameless glass at the roof curb. No second skylight anywhere.
+
+11. **Pool extent.** The first build kept the pool between the waterfall anchor and
+    a mirrored east tip (x −10…10). Reviewers compared it with the plan, which shows
+    the crescent running almost the whole south facade. It now spans x −14.4…14.4
+    (centroid (0, −12.4)); the waterfall spills from the south‑west lip at the point
+    nearest the manifest anchor (−9.4, −13.75 vs. −9.1, −12.6).
+12. **Aerial camera.** The manifest camera sits south‑east and looks north‑west, so
+    the sea, the coast and the south‑east skyline the brief asks for are all behind
+    it. The aerial still is taken from the west, elevated, looking east‑south‑east
+    instead: roof + oculus, crescent pool, waterfall (nearest, west), firepit
+    (south‑east), sea, islands and skyline in one frame. The manifest's
+    south‑east vantage remains covered by the `east` view.
+13. **Per‑view exposure.** Each view carries an exposure compensation (±0.6 EV), as a
+    photographer meters each shot; the scene lighting itself is identical for all
+    views.
 
 ## Not taken from the photos
 

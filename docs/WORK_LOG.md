@@ -86,3 +86,38 @@ swapping or duplicates). Fixes made for round 3:
   replaces the dome‑shaped canopy masses near the ridge; sea layers modulated to
   hide tiling; darker limestone cliff under the villa.
 - Integration: all code‑review BUG items fixed (see commit "Harden embedding").
+
+### Round 3 — full set at 640×360, fresh blind reviewers
+
+| Reviewer emphasis | Realism | Light & colour | Architecture | Layout | Vegetation & water | Overall |
+|---|---|---|---|---|---|---|
+| Architecture & materials | 4.0 | 5.0 | 4.0 | 7.0 | 5.0 | **5.0** |
+| Layout consistency | 4.0 | 4.0 | 5.0 | 7.0 | 4.0 | **4.8** |
+| Light, colour, nature | 3.5 | 3.5 | 4.0 | 6.0 | 3.5 | **4.1** |
+
+Mean 4.6 (round 2: 4.1). Every reviewer again confirmed correct, stable programme
+placement (no mirroring, swapping, duplicates). Remaining criticism and what was done
+before the final set:
+- Pool ends were sharp "boat bows" → rounded ends; deck edge follows them.
+- Ground under the cantilevers read as a flat dark lawn → rock/soil under the house,
+  banded darker limestone on the cliff, boulders allowed under the pool.
+- Down-facing soffits were near black (environment lower hemisphere) → bounce from
+  a sunlit deck/sea tone.
+- Stair seemed to cross the firepit platform → it now lands on the terrace; loose
+  cushion "teeth" removed from the curved bench.
+- Marble read as contour lines → ridged‑noise veining; furniture boxes had 0–1 UVs
+  per face (stretched walnut) → metre‑scaled box projection.
+- Kitchen lacked appliances → two black‑glass ovens, induction hob, bronze hood.
+- Plants filled foreground frames (workspace, entry, west) → potted plant moved; no
+  trees within 26 m or shrubs within 13 m in front of any exterior lens.
+- Exposure inconsistent between views → per‑view exposure compensation (as a
+  photographer would meter each shot), eased during transitions; clearer air,
+  bluer sea, narrower glitter path.
+- Aerial never showed the sea → reframed from the north‑west over the roof toward
+  the pool, sea and south‑east skyline (see RECONCILIATION.md).
+- Entry tree hid the door → camera offset east; brighter entry hall; planted canopy.
+- Driveway read as a pale mound behind the roof → darker setts.
+
+Not addressed (would need more than this session): true sculpted rock geometry for
+the cliff (it is a heightfield + instanced boulders), higher‑resolution foliage, an
+L‑sofa that reads as an L from the lounge camera, kitchen dressing variety.

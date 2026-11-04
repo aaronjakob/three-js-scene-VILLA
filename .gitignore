@@ -3,3 +3,5 @@ dist/
 .DS_Store
 *.log
 renders/_tmp/
+renders/*.png
+renders/stats.json
