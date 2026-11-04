@@ -52,7 +52,8 @@ varying vec3 vTWorldNormal;`,
   vec2 muv = (gp - uCliffBounds.xy) / (uCliffBounds.zw - uCliffBounds.xy);
   float m = 0.0;
   if (muv.x > 0.0 && muv.y > 0.0 && muv.x < 1.0 && muv.y < 1.0) m = texture2D(uCliffCover, muv).r;
-  float push = 0.6 * m;
+  // sink only where the cliff mesh already lies on top (it rises first)
+  float push = 0.6 * smoothstep(0.3, 1.0, m);
   vec2 bd = gp - vec2(${f(wf.basinC.x)}, ${f(wf.basinC.y)});
   float ca = ${f(Math.cos(-wf.ang))}, sa = ${f(Math.sin(-wf.ang))};
   vec2 bl = vec2(bd.x * ca - bd.y * sa, bd.x * sa + bd.y * ca);

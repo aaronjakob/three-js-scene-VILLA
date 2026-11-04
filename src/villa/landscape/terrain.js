@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Simplex, smoothstep, clamp, lerp } from '../core/noise.js';
-import { GLSL_NOISE } from '../core/noise.js';
+import { createGeoTerrainMaterial } from './geology/terrainmat.js';
 import { FIRE_STAIR_PTS, DRIVE_PTS, COURT } from '../architecture/plan.js';
 
 // stair from the east terrace (z 18) down to the firepit terrace (z 12.65)
@@ -320,134 +320,9 @@ export function buildHeightTexture(field, { size = 512, x0, y0, x1, y1, linear =
   return tex;
 }
 
-const TERRAIN_FRAG_PARS = /* glsl */ `
-${GLSL_NOISE}
-varying vec3 vTWorldPos;
-varying vec3 vTWorldNormal;
-float vt_rock;
-float vt_wet;
-float vt_veg;
-
-vec3 vt_bump(vec3 surfPos, vec3 surfNorm, float height) {
-  vec3 sx = dFdx(surfPos);
-  vec3 sy = dFdy(surfPos);
-  vec3 r1 = cross(sy, surfNorm);
-  vec3 r2 = cross(surfNorm, sx);
-  float det = dot(sx, r1);
-  float dbx = dFdx(height);
-  float dby = dFdy(height);
-  vec3 grad = sign(det) * (dbx * r1 + dby * r2);
-  return normalize(abs(det) * surfNorm - grad);
-}
-`;
-
+// Terrain material: limestone shared with the cliff mesh and the stones,
+// soil / dry grass / litter near the villa, forest colour on the far hills;
+// sinks under the high-resolution cliff mesh (see ./geology/terrainmat.js).
 export function createTerrainMaterial() {
-  const mat = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    roughness: 0.92,
-    metalness: 0.0,
-    envMapIntensity: 0.55,
-  });
-  mat.name = 'Terrain';
-  mat.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace(
-        '#include <common>',
-        `#include <common>
-varying vec3 vTWorldPos;
-varying vec3 vTWorldNormal;`,
-      )
-      .replace(
-        '#include <worldpos_vertex>',
-        `#include <worldpos_vertex>
-vTWorldPos = (modelMatrix * vec4(transformed, 1.0)).xyz;
-vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
-      );
-    shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', `#include <common>\n${TERRAIN_FRAG_PARS}`)
-      .replace(
-        '#include <color_fragment>',
-        `#include <color_fragment>
-{
-  vec3 wp = vTWorldPos;
-  vec3 wn = normalize(vTWorldNormal);
-  float slope = 1.0 - wn.y;
-  float h = wp.y;
-  float dist = length(wp - cameraPosition);
-  float n1 = vh_fbm3(wp * 0.035, 4);
-  float n2 = vh_fbm3(wp * 0.21 + 3.0, 3);
-  float fineFade = 1.0 - smoothstep(40.0, 220.0, dist);
-  float n3 = (fineFade > 0.0 ? vh_noise3(wp * 1.3) : 0.0) * fineFade;
-  float rockMask = smoothstep(0.26, 0.48, slope + n1 * 0.26 + n2 * 0.1);
-  rockMask *= 1.0 - smoothstep(30.0, 120.0, h) * 0.85;
-  // inland of the house (graded drive cuts, hill): scrub, not bare rock
-  rockMask *= mix(1.0, 0.12, smoothstep(-12.0, -30.0, wp.z) * (1.0 - smoothstep(60.0, 140.0, h)));
-  // the sea cliff under the villa reads as continuous limestone down to the surf
-  float cliffZone = 1.0 - smoothstep(40.0, 75.0, length(wp.xz - vec2(0.0, 26.0)));
-  float cliffK = cliffZone * smoothstep(0.06, 0.16, slope + n2 * 0.08) * (1.0 - smoothstep(15.5, 17.2, h));
-  rockMask = max(rockMask, cliffK);
-  // under the cantilevered house/pool: shaded rock and soil, nothing grows
-  float underHouse = 1.0 - smoothstep(0.85, 1.05, length((wp.xz - vec2(0.0, 2.0)) / vec2(23.5, 16.5)));
-  rockMask = max(rockMask, underHouse * step(h, 17.45));
-  float shore = 1.0 - smoothstep(0.4, 3.2 + n1 * 2.0, h);
-  rockMask = max(rockMask, shore);
-  float underwater = 1.0 - smoothstep(-1.2, 0.2, h);
-  // forest canopy / maquis colour
-  float clump = vh_fbm3(wp * 0.16 + 4.0, 2);
-  vec3 vegA = vec3(0.030, 0.055, 0.022);
-  vec3 vegB = vec3(0.070, 0.100, 0.040);
-  vec3 vegC = vec3(0.120, 0.128, 0.065);
-  vec3 veg = mix(vegA, vegB, smoothstep(-0.25, 0.35, clump));
-  veg = mix(veg, vegC, smoothstep(0.15, 0.55, n2) * 0.45);
-  // dry earth / scrub patches on gentle slopes
-  float dry = smoothstep(0.25, 0.55, n1 + 0.15) * (1.0 - smoothstep(0.0, 0.25, slope));
-  veg = mix(veg, vec3(0.16, 0.14, 0.09), dry * 0.35);
-  // limestone
-  float strata = 0.5 + 0.5 * sin(wp.y * 2.1 + n1 * 7.0 + n2 * 2.0);
-  vec3 rockA = vec3(0.38, 0.36, 0.325);
-  vec3 rockB = vec3(0.21, 0.20, 0.185);
-  vec3 rockC = vec3(0.46, 0.43, 0.38);
-  vec3 rockCol = mix(rockB, rockA, smoothstep(-0.25, 0.35, n2 + n3 * 0.5));
-  rockCol = mix(rockCol, rockC, strata * 0.22 + smoothstep(0.3, 0.6, n1) * 0.2);
-  // dark weathering streaks running down the face
-  float streak = vh_noise3(vec3(wp.x * 0.9, wp.y * 0.08, wp.z * 0.9));
-  rockCol *= 1.0 - 0.28 * smoothstep(0.1, 0.5, streak) * smoothstep(0.35, 0.7, slope);
-  // vegetation clinging to ledges on the cliff
-  float ledgeVeg = smoothstep(0.1, 0.5, n2 + 0.2) * (1.0 - smoothstep(0.35, 0.7, slope)) * (1.0 - shore);
-  // the sun-facing sea cliff: darker, weathered, with vegetated ledges
-  float bands = 0.5 + 0.5 * sin(wp.y * 3.1 + n2 * 4.0 + n1 * 3.0);
-  rockCol *= mix(1.0, (0.55 + 0.3 * smoothstep(-0.3, 0.4, n1)) * (0.8 + 0.25 * bands), cliffK);
-  vec3 col = mix(veg, rockCol, rockMask);
-  col = mix(col, veg * 1.1, ledgeVeg * rockMask * 0.6);
-  // wet dark band at the waterline
-  vt_wet = (1.0 - smoothstep(-0.2, 1.4, h + n3 * 0.3));
-  col *= mix(1.0, 0.42, vt_wet);
-  col = mix(col, vec3(0.05, 0.12, 0.12), underwater * 0.6);
-  vt_rock = rockMask;
-  vt_veg = 1.0 - rockMask;
-  diffuseColor.rgb = col;
-}`,
-      )
-      .replace(
-        '#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>
-roughnessFactor = mix(mix(0.96, 0.82, vt_rock), 0.35, vt_wet);`,
-      )
-      .replace(
-        '#include <normal_fragment_maps>',
-        `#include <normal_fragment_maps>
-{
-  vec3 wp = vTWorldPos;
-  float dist = length(wp - cameraPosition);
-  float f1 = 1.0 - smoothstep(60.0, 500.0, dist);
-  float f2 = 1.0 - smoothstep(15.0, 90.0, dist);
-  float canopy = vh_fbm3(wp * 0.22, 2);
-  float rockB = vh_fbm3(wp * 0.6, 2) * 0.35 + (f2 > 0.0 ? vh_noise3(wp * 2.7) * 0.08 * f2 : 0.0);
-  float hgt = mix(canopy * 1.1 * (0.4 + 0.6 * f1), rockB, vt_rock);
-  normal = vt_bump(-vViewPosition, normal, hgt);
-}`,
-      );
-  };
-  mat.customProgramCacheKey = () => 'terrain-v1';
-  return mat;
+  return createGeoTerrainMaterial();
 }

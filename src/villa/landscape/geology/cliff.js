@@ -201,7 +201,7 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
       let a = smoothstep(3.0, 9.0, Math.min(ex, ey)) * (1 - smoothstep(18.5, 21.5, h));
       amp[c] = a;
       // caps (max rock elevation)
-      let cz = Math.abs(x) < 32 ? 17.45 : 40;
+      let cz = Math.abs(x) < 32 ? 17.45 - 0.7 * Math.abs(nzB.noise2(x / 4.5, y / 4.5)) : 40;
       if (pointInPoly(x, y, deck)) cz = Math.min(cz, 17.3);
       if (pointInPoly(x, y, pool)) cz = Math.min(cz, 15.35);
       const st = stairProj(x, y);
@@ -259,10 +259,10 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
     for (let d = -dil; d <= dil && !m; d++) m = Math.max(m, tmpC[clamp(j + d, 0, ny - 1) * nx + i]);
     coverRaw[j * nx + i] = m;
   }
-  const cover = blur2D(coverRaw, nx, ny, Math.max(1, Math.round(0.6 / vs)));
+  const cover = blur2D(coverRaw, nx, ny, Math.max(1, Math.round(1.1 / vs)));
   for (let c = 0; c < NC; c++) {
     cover[c] *= wDom[c];
-    hbase[c] = lerp(hbase[c], hmax[c], cover[c]);
+    hbase[c] = lerp(hbase[c], hmax[c], smoothstep(0.0, 0.3, cover[c]));
   }
   // terrain push-down mask (0.5 m texels) for the terrain vertex stage
   const mStep = Math.max(1, Math.round(0.5 / vs));
@@ -309,14 +309,16 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
       // joints: vertical cracks cut into the blocks
       Fr -= crack[c] * 0.9;
       // weathering: rounded lumps + finer roughness
-      Fr += 0.2 * nz3.noise3(x / 1.9, y / 1.9, z / 1.6) + 0.075 * nz3.noise3(x / 0.62 + 11, y / 0.62, z / 0.62);
+      Fr += 0.13 * nz3.noise3(x / 1.9, y / 1.9, z / 1.6) + 0.05 * nz3.noise3(x / 0.62 + 11, y / 0.62, z / 0.62);
+      // sharp creases (ridged noise) so faces read fractured, not modelled
+      Fr += 0.08 * (0.3 - Math.abs(nzB.noise3(x / 1.1 + 5, y / 1.1, z / 0.8)));
       // solution pockets (tafoni)
       const pk = nzB.noise3(x / 1.3, y / 1.3, z / 1.1);
       if (pk > 0.45) Fr -= (pk - 0.45) * 2.2;
       // wave-cut notch just above the sea
       Fr -= 0.55 * Math.exp(-(((z - 0.55) / 0.55) ** 2));
       Fr -= (1 - a) * 3.0;
-      Fr = Math.min(Fr, cap[c] - z);
+      Fr = smin(Fr, cap[c] - z, 0.35);
     }
     // plunge basin lip
     if (rim[c] > -4) {

@@ -1,103 +1,36 @@
 import * as THREE from 'three';
 import { Simplex, mulberry32 } from '../core/noise.js';
-import { GLSL_NOISE } from '../core/noise.js';
-import { pointInPoly, offset, smooth, ccw, deckOutline, poolOutline, COURT, FIREPIT, FIRE_STAIR_PTS } from '../architecture/plan.js';
+import { pointInPoly, offset, deckOutline, poolOutline, COURT, FIREPIT, FIRE_STAIR_PTS } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
-import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { buildGeology } from './geology/index.js';
+import { createRockMaterial } from './geology/rockmat.js';
 
-// Limestone boulders and sea stacks: displaced icosahedra (several seeds),
-// stratified, with a triplanar-ish procedural rock shader. Placed along the
-// waterline, on the cliff under the villa, and as garden boulders.
+// Landscape detail: the geology of the site (high-resolution limestone sea
+// cliff under the villa, fractured stones at several scales along the whole
+// coast; see ./geology/) and the distant settlements.
 
-function rockGeometry(seed, detail = 4) {
-  // weld the icosphere so displaced normals are smooth (not faceted)
-  let g = new THREE.IcosahedronGeometry(1, detail);
-  g.deleteAttribute('normal');
-  g.deleteAttribute('uv');
-  g = mergeVertices(g, 1e-4);
-  const s = new Simplex(seed);
-  const pos = g.attributes.position;
-  const ao = new Float32Array(pos.count);
-  const v = new THREE.Vector3();
-  const flat = 0.55 + (seed % 5) * 0.08;
-  const tilt = (seed % 7) * 0.3;
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
-    let d = 1 + 0.32 * s.fbm3(v.x * 1.2, v.y * 1.2, v.z * 1.2, 4);
-    // facets / fractures
-    d += 0.12 * Math.abs(s.noise3(v.x * 3.1 + 7, v.y * 3.1, v.z * 3.1));
-    // strata
-    d += 0.03 * Math.sin((v.y * Math.cos(tilt) + v.x * Math.sin(tilt)) * 14);
-    v.multiplyScalar(d);
-    v.y *= flat;
-    if (v.y < -0.35) v.y = -0.35 + (v.y + 0.35) * 0.4;
-    pos.setXYZ(i, v.x, v.y, v.z);
-    ao[i] = d;
-  }
-  g.computeVertexNormals();
-  // cavity AO: vertices pushed in (low d) are darker
-  const col = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    const c = Math.min(1, Math.max(0.35, 0.62 + (ao[i] - 1) * 1.4));
-    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = c;
-  }
-  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  return g;
-}
-
+// Stand-alone limestone material for meshes without baked attributes
+// (e.g. the plinth walls under the deck overhang).
 export function rockMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, envMapIntensity: 0.45, vertexColors: true });
-  m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRW;\nvarying vec3 vRN;')
-      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
-#ifdef USE_INSTANCING
-vRW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-vRN = normalize(mat3(modelMatrix) * mat3(instanceMatrix) * objectNormal);
-#else
-vRW = (modelMatrix * vec4(transformed, 1.0)).xyz;
-vRN = normalize(mat3(modelMatrix) * objectNormal);
-#endif`);
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>\n${GLSL_NOISE}\nvarying vec3 vRW;\nvarying vec3 vRN;\nfloat vr_wet;`)
-      .replace('#include <color_fragment>', `#include <color_fragment>
-{
-  vec3 p = vRW;
-  float n1 = vh_fbm3(p * 0.35, 4);
-  float n2 = vh_fbm3(p * 2.2, 3);
-  float strata = 0.5 + 0.5 * sin(p.y * 3.3 + n1 * 5.0);
-  vec3 a = vec3(0.36, 0.345, 0.315);
-  vec3 b = vec3(0.17, 0.165, 0.15);
-  vec3 c = mix(b, a, smoothstep(-0.3, 0.4, n1 + n2 * 0.4));
-  c *= 0.86 + 0.14 * strata;
-  // lichen / moss in crevices facing up
-  float moss = smoothstep(0.55, 0.9, vRN.y) * smoothstep(0.1, 0.5, n2 + 0.2);
-  c = mix(c, vec3(0.16, 0.18, 0.10), moss * 0.55);
-  // dark wet foot near the sea
-  vr_wet = 1.0 - smoothstep(-0.3, 1.6, p.y + n2 * 0.4);
-  c *= mix(1.0, 0.45, vr_wet);
-  diffuseColor.rgb *= c;
-}`)
-      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.3, vr_wet);');
-  };
-  m.customProgramCacheKey = () => 'rock-v1';
-  return m;
+  return createRockMaterial('plain');
 }
 
 export function buildLandscapeDetail(ctx) {
-  const { scene, field, quality } = ctx;
-  const root = new THREE.Group();
-  root.name = 'rocks';
-  scene.add(root);
-  const mat = rockMaterial();
-  const k = quality.rocks ?? 1;
+  const { field, quality } = ctx;
+  const geology = buildGeology(ctx);
+  // true ground height including cliff rock (for anything seated on the cliff)
+  ctx.geology = { surfaceHeight: geology.surfaceHeight, cliff: geology.cliff, stats: geology.stats };
   const rng = mulberry32(99);
   const nz = new Simplex(13);
+  advanceLegacyRng(field, quality.rocks ?? 1, rng, nz);
+  buildSettlements(geology.root, field, rng, nz);
+  return { root: geology.root, material: geology.material, geology };
+}
+
+// The settlements continue the random sequence the previous boulder scatter
+// consumed; replay that consumption so the distant city keeps its layout.
+function advanceLegacyRng(field, k, rng, nz) {
   const deck = offset(deckOutline(), 1.0);
-  const variants = [0, 1, 2, 3, 4, 5].map((i) => rockGeometry(i * 17 + 3, i < 3 ? 4 : 3));
-  const variantsLow = [0, 1, 2, 3, 4, 5].map((i) => rockGeometry(i * 17 + 3, 2));
-  const buckets = variants.map(() => []);
-  const bucketsLow = variants.map(() => []);
   const poolPad = offset(poolOutline(), 1.2);
   const blocked = (x, y) =>
     pointInPoly(x, y, deck) ||
@@ -106,14 +39,7 @@ export function buildLandscapeDetail(ctx) {
     Math.hypot(x - FIREPIT.cx, y - FIREPIT.cy) < FIREPIT.r + 0.4 ||
     polyProject(FIRE_STAIR_PTS, x, y).d < 1.4 ||
     Math.hypot(x + 10.6, y + 14.6) < 2.6;
-
-  const put = (x, y, z, s, sy = 1) => {
-    const vi = Math.floor(rng() * variants.length);
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler((rng() - 0.5) * 0.5, rng() * Math.PI * 2, (rng() - 0.5) * 0.5));
-    (Math.hypot(x, y) > 120 ? bucketsLow : buckets)[vi].push(new THREE.Matrix4().compose(new THREE.Vector3(x, z, -y), q, new THREE.Vector3(s * (0.8 + rng() * 0.5), s * sy, s * (0.8 + rng() * 0.5))));
-  };
-
-  // 1) waterline boulders and sea stacks within 900 m
+  const put = () => { for (let i = 0; i < 6; i++) rng(); };
   const N1 = Math.round(5200 * k);
   for (let i = 0; i < N1; i++) {
     const x = (rng() * 2 - 1) * (rng() < 0.6 ? 260 : 900);
@@ -122,11 +48,10 @@ export function buildLandscapeDetail(ctx) {
     const h = field.height(x, y);
     if (h < -3.5 || h > 7) continue;
     if (blocked(x, y)) continue;
-    const big = rng() < 0.12;
-    const s = big ? 2.4 + rng() * 3.5 : 0.5 + rng() * 1.8;
-    put(x, y, h - s * 0.25, s, big ? 0.9 + rng() * 0.8 : 0.7 + rng() * 0.4);
+    rng(); // big?
+    rng(); rng(); // size, flattening
+    put();
   }
-  // 2) cliff outcrops on steep faces near the villa (0..140 m)
   const N2 = Math.round(3600 * k);
   for (let i = 0; i < N2; i++) {
     const x = (rng() * 2 - 1) * 140;
@@ -137,45 +62,21 @@ export function buildLandscapeDetail(ctx) {
     const slope = field.slope(x, y, 0.8);
     if (slope < 0.18) continue;
     if (nz.fbm2(x / 9, y / 9, 2) < -0.25 && slope < 0.5) continue;
-    const s = 0.8 + rng() * (slope > 0.45 ? 3.0 : 1.6);
-    put(x, y, h - s * 0.5, s, 0.55 + rng() * 0.45);
+    rng(); rng();
+    put();
   }
-  // 3) garden boulders around the entry court and along the drive
   for (let i = 0; i < 70 * k; i++) {
     const a = rng() * Math.PI * 2;
     const r = COURT.r + 1.4 + rng() * 9;
     const x = COURT.cx + Math.cos(a) * r, y = COURT.cy + Math.sin(a) * r;
     if (y < 12.5) continue;
     if (blocked(x, y)) continue;
-    const s = 0.5 + rng() * 1.3;
-    put(x, y, field.height(x, y) - s * 0.3, s, 0.7);
+    rng();
+    put();
   }
-  // rock outcrop beside the garden stair (entry reference)
-  for (let i = 0; i < 9; i++) put(-10.2 - rng() * 2.5, 15 + i * 0.7, 17.6 + i * 0.15, 1.4 + rng() * 1.2, 1.1);
-  // waterfall grotto walls framing the cascade
-  for (let i = 0; i < 14; i++) {
-    const a = Math.PI * (0.65 + rng() * 0.9);
-    put(-10.9 + Math.cos(a) * 3.4, -14.4 + Math.sin(a) * 2.4, 8.4 + rng() * 2.5, 1.2 + rng() * 1.4, 1.1);
-  }
-  // near-shore stacks offshore
-  for (const [x, y, s] of [[60, -78, 6], [74, -86, 3.5], [-48, -70, 4.5], [140, -260, 8], [190, -300, 5], [-160, -200, 6.5]]) {
-    put(x, y, field.height(x, y) - 1.5, s, 1.4);
-  }
-
-  for (let i = 0; i < variants.length * 2; i++) {
-    const low = i >= variants.length;
-    const list = (low ? bucketsLow : buckets)[i % variants.length];
-    if (!list.length) continue;
-    const im = new THREE.InstancedMesh((low ? variantsLow : variants)[i % variants.length], mat, list.length);
-    list.forEach((m, j) => im.setMatrixAt(j, m));
-    im.castShadow = true;
-    im.receiveShadow = true;
-    im.computeBoundingSphere();
-    im.name = 'rocks-' + i;
-    root.add(im);
-  }
-  buildSettlements(root, field, rng, nz);
-  return { root, material: mat };
+  for (let i = 0; i < 9; i++) { rng(); rng(); put(); }
+  for (let i = 0; i < 14; i++) { rng(); rng(); rng(); put(); }
+  for (let i = 0; i < 6; i++) put();
 }
 
 // Distant city on the far side of the bay (south-east, ~6-7 km) and scattered

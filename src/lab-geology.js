@@ -8,7 +8,6 @@ import { toThree, sunDirection } from './villa/core/world.js';
 import { createSkyDome, buildEnvironment, installHaze, attachHazeToScene } from './villa/render/atmosphere.js';
 import { Pipeline } from './villa/render/pipeline.js';
 import { TerrainField, buildTerrainGeometry, buildHeightTexture, createTerrainMaterial } from './villa/landscape/terrain.js';
-import { createGeoTerrainMaterial } from './villa/landscape/geology/terrainmat.js';
 import { createOcean, generateWaveTexture } from './villa/landscape/ocean.js';
 import { buildGeology } from './villa/landscape/geology/index.js';
 
@@ -55,7 +54,7 @@ scene.add(new THREE.HemisphereLight(new THREE.Color(0.66, 0.68, 0.72), new THREE
 
 const t0 = performance.now();
 const field = new TerrainField(7);
-const tmat = params.has('oldterrain') ? createTerrainMaterial() : createGeoTerrainMaterial();
+const tmat = createTerrainMaterial();
 const terrain = new THREE.Mesh(buildTerrainGeometry(field, { res: q.terrainRes }), tmat);
 terrain.name = 'terrain';
 terrain.receiveShadow = terrain.castShadow = true;
