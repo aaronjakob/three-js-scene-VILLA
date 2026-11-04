@@ -6,7 +6,7 @@ import { LEVEL } from '../core/world.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   smooth, offset, pointInPoly, distToPoly, ellipse, resample, ccw,
-  DECK_PTS, L1_PTS, ROOF_PTS, UPPER_PTS, POOL_PTS, ATRIUM, COURT, DRIVE_PTS, FIREPIT, FIRE_STAIR_PTS,
+  deckOutline, poolOutline, L1_PTS, ROOF_PTS, UPPER_PTS, POOL_PTS, ATRIUM, COURT, DRIVE_PTS, FIREPIT, FIRE_STAIR_PTS,
 } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
 import { atmosphereUniforms } from '../render/atmosphere.js';
@@ -133,8 +133,8 @@ const SPECIES = {
 export function makeTree(species, seed, lod = 0) {
   const sp = SPECIES[species];
   const rng = mulberry32(seed * 7919 + 13);
-  const cardK = lod ? 0.45 : 1;
-  const sizeK = lod ? 1.35 : 1;
+  const cardK = lod ? 0.32 : 1;
+  const sizeK = lod ? 1.6 : 1;
   const H = THREE.MathUtils.lerp(sp.height[0], sp.height[1], rng());
   const R0 = THREE.MathUtils.lerp(sp.trunkR[0], sp.trunkR[1], rng());
   const wood = [];
@@ -318,6 +318,14 @@ vLW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
 vLW = (modelMatrix * vec4(transformed, 1.0)).xyz;
 #endif`);
     sh.fragmentShader = sh.fragmentShader
+      .replace('#include <alphatest_fragment>', `
+{
+  // alpha coverage shrinks in lower mips; scale it back up with the mip level
+  vec2 dx = dFdx(vMapUv * 1024.0), dy = dFdy(vMapUv * 1024.0);
+  float mip = 0.5 * log2(max(dot(dx, dx), dot(dy, dy)));
+  diffuseColor.a *= 1.0 + 0.35 * clamp(mip, 0.0, 6.0);
+}
+#include <alphatest_fragment>`)
       .replace('#include <common>', '#include <common>\nvarying vec3 vLW;\nuniform vec3 uSunDirL;')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
 {
@@ -327,7 +335,7 @@ vLW = (modelMatrix * vec4(transformed, 1.0)).xyz;
   totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.85, 0.55) * back * 0.9 * vColor.r;
 }`);
   };
-  m.customProgramCacheKey = () => 'leaf-v1';
+  m.customProgramCacheKey = () => 'leaf-v2';
   return m;
 }
 
@@ -350,14 +358,17 @@ export function buildVegetation(ctx) {
   const nz = new Simplex(77);
 
   // exclusion zones (plan coords)
-  const deck = ccw(smooth(DECK_PTS, 200));
+  const deck = deckOutline();
   const deckPad = offset(deck, 1.6);
   const pool = ccw(smooth(POOL_PTS, 120));
   const roof = ccw(smooth(ROOF_PTS, 200));
   const l1 = ccw(smooth(L1_PTS, 220));
   const upper = ccw(smooth(UPPER_PTS, 200));
+  const poolPad = offset(poolOutline(), 1.4);
+  const canopy = offset(l1, 0.6);
   const blocked = (x, y) => {
     if (pointInPoly(x, y, deckPad)) return true;
+    if (pointInPoly(x, y, poolPad) || pointInPoly(x, y, canopy)) return true; // nothing grows in the pool or under slabs
     if (Math.hypot(x - COURT.cx, y - COURT.cy) < COURT.r + 0.6) return true;
     if (Math.hypot(x - FIREPIT.cx, y - FIREPIT.cy) < FIREPIT.r + 0.8) return true;
     if (polyProject(FIRE_STAIR_PTS, x, y).d < 1.6) return true;
@@ -440,6 +451,20 @@ export function buildVegetation(ctx) {
     } else if (r < 0.92) {
       placeShrub(x, y, h, (0.7 + rng() * 1.0) * (slope > 0.45 ? 0.8 : 1.15) * (viewCorridor ? 0.8 : 1));
     }
+  }
+
+  // --- outer ring 320..650 m: low-detail trees so ridges read as real canopy ---
+  for (let i = 0; i < 7000 * density; i++) {
+    const rr = Math.sqrt(320 * 320 + rng() * (650 * 650 - 320 * 320));
+    const a = rng() * Math.PI * 2;
+    const x = Math.cos(a) * rr, y = Math.sin(a) * rr + 20;
+    const h = field.height(x, y);
+    if (h < 2) continue;
+    if (field.slope(x, y, 1.5) > 0.45) continue;
+    if (nz.fbm2(x / 60, y / 60, 3) < -0.2) continue;
+    if (blocksSightline(x, y, h)) continue;
+    const sp = h < 30 ? (rng() < 0.6 ? 'pine' : 'oak') : rng() < 0.25 ? 'pine' : 'oak';
+    placeTree(sp, x, y, h, 0.85 + rng() * 0.5);
   }
 
   // --- curated planting near the house ---------------------------------------
@@ -543,10 +568,14 @@ export function buildVegetation(ctx) {
       }
     }
   };
-  vineAlong(l1, LEVEL.upper + 0.15, 0.06, 0.55, (p) => p.y > 3.5);
+  vineAlong(l1, LEVEL.upper + 0.15, 0.06, 0.55, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11));
   vineAlong(roof, LEVEL.roof + 0.2, 0.06, 0.5, (p) => p.y > 3.5);
   // into the atrium (seen from the living room)
-  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.02, ATRIUM.ry - 0.02, 48, ATRIUM.rot)).reverse(), LEVEL.upper - 0.45, -0.05, 0.6, null, vineShort, 'vineS');
+  const shaftRing = ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.04, ATRIUM.ry - 0.04, 64, ATRIUM.rot)).reverse();
+  vineAlong(shaftRing, LEVEL.upper - 0.6, -0.05, 0.55, null, vineShort, 'vineS');
+  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, -0.08, 0.45, null, vineVariants, 'vineA');
+  // the roof lip around the opening spills greenery into the shaft
+  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, vineShort, 'vineS');
 
   // --- build instanced meshes -------------------------------------------------
   const tmpCol = new THREE.Color();
@@ -636,10 +665,10 @@ function buildFarForest(root, field, quality, nz) {
   const c = new THREE.Color();
   let n = 0;
   for (let i = 0; i < count * 6 && n < count; i++) {
-    const rr = 260 + Math.pow(rng(), 0.85) * 3200;
+    const rr = 600 + Math.pow(rng(), 0.85) * 3200;
     const a = rng() * Math.PI * 2;
     const x = Math.cos(a) * rr + 400, y = Math.sin(a) * rr + 600;
-    if (Math.hypot(x, y - 20) < 300) continue;
+    if (Math.hypot(x, y - 20) < 640) continue;
     const h = field.height(x, y);
     if (h < 3) continue;
     const slope = field.slope(x, y, 3);

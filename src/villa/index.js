@@ -106,7 +106,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
   scene.add(sky);
 
   const sunDir = sunDirection(new THREE.Vector3());
-  const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.87, 0.68), 2.7);
+  const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.85, 0.60), 3.8);
   sun.position.copy(sunDir).multiplyScalar(1400).add(new THREE.Vector3(0, 16, 6));
   sun.target.position.set(0, 16, 6);
   sun.castShadow = true;
@@ -119,7 +119,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
   sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(new THREE.Color(0.55, 0.68, 0.9), new THREE.Color(0.16, 0.15, 0.11), 0.35);
+  const hemi = new THREE.HemisphereLight(new THREE.Color(0.66, 0.68, 0.72), new THREE.Color(0.26, 0.21, 0.14), 0.5);
   scene.add(hemi);
 
   // --- landscape -----------------------------------------------------------

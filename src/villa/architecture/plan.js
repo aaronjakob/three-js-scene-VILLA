@@ -116,14 +116,28 @@ export const ENCLOSURE_PTS = [
   [-4.0, 10.7], [-9.5, 10.1], [-14.2, 8.6], [-17.4, 5.7], [-18.7, 2.2],
 ];
 
-// Crescent infinity pool; west tip carries the waterfall (manifest x=-9.1, y=-12.6)
+// Crescent infinity pool following the south facade (plan: nearly full width).
+// The waterfall spills from its south-west lip nearest the manifest anchor
+// (x -9.1, y -12.6); centroid ~ (0, -12.7).
 export const POOL_PTS = [
-  [-10.15, -12.6], [-8.0, -11.6], [-4.0, -11.05], [0, -10.9], [4.0, -11.05],
-  [8.0, -11.6], [10.7, -12.75], [8.7, -14.0], [4.5, -14.75], [0, -15.0],
-  [-4.5, -14.8], [-8.4, -13.85],
+  [-14.4, -8.9], [-12.0, -10.2], [-7.0, -11.3], [0, -11.65], [7.0, -11.3],
+  [12.0, -10.2], [14.4, -8.9], [13.0, -11.4], [8.6, -14.2], [0, -15.6],
+  [-8.6, -14.2], [-13.0, -11.4],
 ];
+export const WATERFALL_SPILL = [-9.4, -13.75];
 
-// Main deck/floor slab (interior + terraces). South edge hugs the pool's north edge.
+// Main deck/floor slab (interior + terraces). Its south edge between the pool
+// tips is taken from the pool curve itself (see building.js) so they meet exactly.
+export const DECK_WEST_PTS = [
+  [-5.0, 11.9], [-10.0, 11.3], [-14.6, 9.9], [-18.6, 6.9], [-21.0, 2.6], [-21.3, -2.8],
+  [-19.9, -6.9], [-17.4, -8.6], [-15.4, -8.6],
+];
+export const DECK_EAST_PTS = [
+  [15.4, -8.6], [16.0, -11.2], [17.0, -13.9], [18.6, -14.9], [20.3, -12.8], [20.9, -7.2],
+  [20.5, -1.0], [20.0, 4.2], [18.4, 8.6], [15.6, 11.0], [10.8, 12.0], [6.0, 12.3],
+  [3.0, 12.5], [0.0, 12.3], [-5.0, 11.9],
+];
+// legacy closed outline (used where a rough deck polygon is enough)
 export const DECK_PTS = [
   [-21.0, 2.6], [-21.3, -2.8], [-19.9, -7.4], [-16.4, -10.6], [-12.4, -11.85],
   [-10.6, -11.9], [-8.0, -11.15], [-4.0, -10.6], [0, -10.45], [4.0, -10.6],
@@ -189,7 +203,35 @@ export const DRIVE_PTS = [
 
 // Stair from the east terrace down to the lower firepit terrace (z 18 -> 12.65)
 export const FIRE_STAIR_PTS = [
-  [18.9, -13.2], [20.1, -14.6], [20.6, -16.6], [20.0, -18.8], [18.6, -20.6], [16.9, -21.4],
+  [19.5, -13.9], [20.4, -15.2], [20.7, -17.0], [20.0, -18.9], [18.6, -20.6], [16.9, -21.4],
 ];
 
 export const FIREPIT = { cx: 13.25, cy: -18.65, r: 4.4, z: 12.65 };
+
+// --- derived outlines (single construction used by every module) ----------
+export function poolOutline(n = 200) {
+  return ccw(smooth(POOL_PTS, n));
+}
+
+// Deck = west terrace curve + the pool's exact north edge + east terrace /
+// north curve, so deck and pool meet without gaps or overlaps.
+export function deckOutline() {
+  const pool = poolOutline();
+  let wi = 0, ei = 0;
+  for (let i = 0; i < pool.length; i++) {
+    if (pool[i].x < pool[wi].x) wi = i;
+    if (pool[i].x > pool[ei].x) ei = i;
+  }
+  const arc = (a, b) => {
+    const out = [];
+    for (let i = a; ; i = (i + 1) % pool.length) { out.push(pool[i]); if (i === b) break; }
+    return out;
+  };
+  const arcA = arc(wi, ei), arcB = arc(ei, wi);
+  const meanY = (a) => a.reduce((s, p) => s + p.y, 0) / a.length;
+  let north = meanY(arcA) > meanY(arcB) ? arcA : arcB;
+  north = north.slice().sort((p, q) => p.x - q.x);
+  const west = smooth(DECK_WEST_PTS, 120, false);
+  const east = smooth(DECK_EAST_PTS, 180, false).slice(0, -1);
+  return ccw([...west, ...north.slice(1, -1), ...east]);
+}

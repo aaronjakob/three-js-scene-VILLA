@@ -76,7 +76,7 @@ export function buildInterior(ctx) {
     // return, faces east
     sofa(3.0, lx - 3.35, ly - 0.15, Math.PI / 2);
     // corner block
-    B.push(M.boucle, place(rbox(1.08, 0.28, 1.08, 0.1, 5), lx - 3.35, ly + 1.75, Z + 0.1));
+    B.push(M.boucle, place(rbox(1.08, 0.28, 1.08, 0.1, 5), lx - 3.35, ly + 1.75, Z + 0.24));
     B.push(M.boucle, place(rbox(1.0, 0.16, 1.0, 0.08, 5), lx - 3.35, ly + 1.75, Z + 0.45));
     // scatter pillows
     for (const [px, py, r] of [[-7.6, -1.45, 0.2], [-4.6, -1.45, -0.15], [-9.15, -2.6, Math.PI / 2 + 0.2]]) {
@@ -126,34 +126,35 @@ export function buildInterior(ctx) {
   {
     const [wx, wy] = ANCHORS.workspace; // -11.7, 2.4
     const deskL = 4.2, deskD = 0.86, deskH = 0.74;
-    B.push(M.walnut, place(rbox(deskL, 0.06, deskD, 0.012, 2), wx, wy, Z + deskH - 0.06));
+    B.push(M.walnut, place(rbox(deskL, 0.05, deskD, 0.012, 2), wx, wy, Z + deskH - 0.025));
     // pedestal (drawers) at east end, slab leg at west end
-    B.push(M.walnut, place(rbox(0.55, deskH - 0.06, deskD - 0.06, 0.01, 2), wx + deskL / 2 - 0.35, wy, Z));
-    B.push(M.walnut, place(rbox(0.06, deskH - 0.06, deskD - 0.1, 0.01, 2), wx - deskL / 2 + 0.12, wy, Z));
+    B.push(M.walnut, place(rbox(0.55, deskH - 0.05, deskD - 0.06, 0.01, 2), wx + deskL / 2 - 0.35, wy, Z + (deskH - 0.05) / 2));
+    B.push(M.walnut, place(rbox(0.06, deskH - 0.05, deskD - 0.1, 0.01, 2), wx - deskL / 2 + 0.12, wy, Z + (deskH - 0.05) / 2));
     B.push(M.metalDark, place(rbox(0.52, 0.006, 0.006, 0.002, 1), wx + deskL / 2 - 0.35, wy - deskD / 2 + 0.03, Z + 0.45));
     // three monitors on the south edge, screens facing north (to the user)
     const mon = (dx, rot, scr) => {
-      const body = rbox(0.74, 0.44, 0.03, 0.008, 2);
-      const screen = new THREE.PlaneGeometry(0.71, 0.405);
+      const body = rbox(0.62, 0.37, 0.025, 0.006, 2);
+      const screen = new THREE.PlaneGeometry(0.595, 0.335);
       screen.rotateY(Math.PI); // face +y (north) after placement: plane faces +z local -> north is -z three
       screen.translate(0, 0, -0.016);
       // local: monitor faces -z (three) == north
-      const arm = new THREE.CylinderGeometry(0.012, 0.012, 0.22, 10); at(arm, 0, -0.33, 0.05);
-      const base = rbox(0.22, 0.012, 0.16, 0.004, 1); at(base, 0, -0.44, 0.05);
+      const arm = new THREE.CylinderGeometry(0.012, 0.012, 0.16, 10); at(arm, 0, -0.26, 0.05);
+      const base = rbox(0.2, 0.012, 0.15, 0.004, 1); at(base, 0, -0.335, 0.05);
       for (const g of [body, arm, base]) { at(g, 0, 0, 0); }
       const px = wx + dx, py = wy - 0.22;
-      B.push(M.monitorBody, place(body, px, py, Z + deskH + 0.52, rot));
-      B.push(M.monitorBody, place(arm, px, py, Z + deskH + 0.52, rot));
-      B.push(M.monitorBody, place(base, px, py, Z + deskH + 0.52, rot));
-      B.push(scr, place(screen, px, py, Z + deskH + 0.52, rot));
+      const hc = Z + deskH + 0.34;
+      B.push(M.monitorBody, place(body, px, py, hc, rot));
+      B.push(M.monitorBody, place(arm, px, py, hc, rot));
+      B.push(M.monitorBody, place(base, px, py, hc, rot));
+      B.push(scr, place(screen, px, py, hc, rot));
     };
-    mon(-0.78, -0.33, M.screen2);
+    mon(-0.66, -0.28, M.screen2);
     mon(0, 0, M.screen);
-    mon(0.78, 0.33, M.screen3);
+    mon(0.66, 0.28, M.screen3);
     // keyboard, mouse, notebook, globe desk lamp, pot
-    B.push(M.monitorBody, place(rbox(0.44, 0.015, 0.14, 0.005, 1), wx, wy + 0.12, Z + deskH));
-    B.push(M.monitorBody, place(rbox(0.06, 0.02, 0.1, 0.01, 2), wx + 0.38, wy + 0.12, Z + deskH));
-    B.push(M.books, place(rbox(0.22, 0.02, 0.3, 0.003, 1), wx - 0.6, wy + 0.15, Z + deskH, 0.2));
+    B.push(M.monitorBody, place(rbox(0.44, 0.015, 0.14, 0.005, 1), wx, wy + 0.12, Z + deskH + 0.008));
+    B.push(M.monitorBody, place(rbox(0.06, 0.02, 0.1, 0.01, 2), wx + 0.38, wy + 0.12, Z + deskH + 0.01));
+    B.push(M.books, place(rbox(0.22, 0.02, 0.3, 0.003, 1), wx - 0.6, wy + 0.15, Z + deskH + 0.01, 0.2));
     B.push(M.lampShade, place(new THREE.SphereGeometry(0.12, 24, 16), wx - 1.75, wy - 0.18, Z + deskH + 0.12));
     B.push(M.darkStone, place(new THREE.CylinderGeometry(0.06, 0.08, 0.04, 20), wx - 1.75, wy - 0.18, Z + deskH));
     // office chair
@@ -181,12 +182,12 @@ export function buildInterior(ctx) {
     const fy = 4.7 - 0.19;
     // walnut slats x -17.0 .. -12.4
     for (let x = -17.0; x < -12.4; x += 0.095) {
-      B.push(M.walnut, place(rbox(0.045, 4.4, 0.06, 0.01, 1), x, fy - 0.03, Z));
+      B.push(M.walnut, place(rbox(0.045, 4.1, 0.06, 0.01, 1), x, fy - 0.03, Z + 2.05));
     }
     // backlit shelving niche x -12.2 .. -8.6
     {
       const x0 = -12.2, x1 = -8.6;
-      B.push(M.walnutDark, place(rbox(x1 - x0, 4.4, 0.04, 0.005, 1), (x0 + x1) / 2, fy + 0.02, Z));
+      B.push(M.walnutDark, place(rbox(x1 - x0, 4.1, 0.04, 0.005, 1), (x0 + x1) / 2, fy + 0.02, Z + 2.05));
       for (let k = 0; k < 6; k++) {
         const zz = Z + 0.45 + k * 0.62;
         B.push(M.walnut, place(rbox(x1 - x0, 0.04, 0.38, 0.01, 1), (x0 + x1) / 2, fy - 0.19, zz));
@@ -198,7 +199,7 @@ export function buildInterior(ctx) {
         while (x < x1 - 0.4) {
           const w = 0.35 + ((k * 7 + i * 3) % 5) * 0.08;
           if ((k + i) % 3 === 0) {
-            B.push(M.books, place(rbox(w, 0.26, 0.24, 0.004, 1), x + w / 2, fy - 0.17, zz + 0.04));
+            B.push(M.books, place(rbox(w, 0.26, 0.24, 0.004, 1), x + w / 2, fy - 0.17, zz + 0.15));
           } else if ((k + i) % 3 === 1) {
             B.push((k + i) % 2 ? M.ceramic : M.ceramicDark, place(new THREE.LatheGeometry([V2(0, 0), V2(0.08, 0), V2(0.1, 0.12), V2(0.05, 0.24), V2(0.04, 0.26), V2(0, 0.26)], 24), x + 0.12, fy - 0.17, zz + 0.04));
           }
@@ -207,7 +208,7 @@ export function buildInterior(ctx) {
         }
       }
       // shelf uprights
-      for (const x of [x0, (x0 + x1) / 2, x1]) B.push(M.walnut, place(rbox(0.04, 4.0, 0.38, 0.005, 1), x, fy - 0.19, Z + 0.2));
+      for (const x of [x0, (x0 + x1) / 2, x1]) B.push(M.walnut, place(rbox(0.04, 3.7, 0.38, 0.005, 1), x, fy - 0.19, Z + 0.2 + 1.85));
     }
     // rough stone panel x -8.4 .. -6.6 (the "rock wall" of the reference)
     {
@@ -239,8 +240,10 @@ export function buildInterior(ctx) {
       const cx = dx + Math.cos(a) * r, cy = dy + Math.sin(a) * r;
       const rot = Math.atan2(Math.sin(a), Math.cos(a)) + Math.PI / 2; // face the centre
       const seat = rbox(0.52, 0.12, 0.5, 0.05, 4); at(seat, 0, 0.44, 0);
-      // curved back: segment of a torus-ish shell
-      const back = rbox(0.5, 0.42, 0.08, 0.04, 4); back.rotateX(0.1); at(back, 0, 0.74, 0.24);
+      // curved tub back wrapping ~220 degrees (upholstered shell)
+      const back = new THREE.CylinderGeometry(0.29, 0.27, 0.36, 28, 1, true, Math.PI * 0.4, Math.PI * 1.2);
+      back.rotateY(Math.PI);
+      at(back, 0, 0.68, 0.02);
       const legs = [];
       for (const [lx2, lz] of [[-0.2, -0.18], [0.2, -0.18], [-0.2, 0.2], [0.2, 0.2]]) {
         const l = new THREE.CylinderGeometry(0.018, 0.014, 0.4, 8); at(l, lx2, 0.2, lz); legs.push(l);
@@ -272,9 +275,9 @@ export function buildInterior(ctx) {
     const iy = 2.65;
     // island: dark stone with waterfall ends
     B.push(M.darkStone, place(rbox(4.4, 0.06, 1.3, 0.01, 2), kx, iy, Z + 0.88));
-    B.push(M.darkStone, place(rbox(0.06, 0.88, 1.3, 0.01, 2), kx - 2.17, iy, Z));
-    B.push(M.darkStone, place(rbox(0.06, 0.88, 1.3, 0.01, 2), kx + 2.17, iy, Z));
-    B.push(M.walnut, place(rbox(4.26, 0.84, 0.95, 0.01, 2), kx, iy + 0.12, Z + 0.02));
+    B.push(M.darkStone, place(rbox(0.06, 0.88, 1.3, 0.01, 2), kx - 2.17, iy, Z + 0.44));
+    B.push(M.darkStone, place(rbox(0.06, 0.88, 1.3, 0.01, 2), kx + 2.17, iy, Z + 0.44));
+    B.push(M.walnut, place(rbox(4.26, 0.85, 1.2, 0.01, 2), kx, iy, Z + 0.43));
     // sink + bronze tap
     B.push(M.monitorBody, place(rbox(0.7, 0.02, 0.42, 0.04, 3), kx + 0.9, iy + 0.25, Z + 0.93));
     {
@@ -298,16 +301,16 @@ export function buildInterior(ctx) {
     const wy = 6.0 - 0.25 - 0.33;
     const x0 = 4.9, x1 = 15.3;
     // tall units left and right
-    B.push(M.walnut, place(rbox(3.0, 3.0, 0.66, 0.01, 2), x0 + 1.5, wy, Z));
-    B.push(M.walnut, place(rbox(3.2, 3.0, 0.66, 0.01, 2), x1 - 1.6, wy, Z));
+    B.push(M.walnut, place(rbox(3.0, 3.0, 0.66, 0.01, 2), x0 + 1.5, wy, Z + 1.5));
+    B.push(M.walnut, place(rbox(3.2, 3.0, 0.66, 0.01, 2), x1 - 1.6, wy, Z + 1.5));
     // reveal lines between doors
-    for (let x = x0 + 0.6; x < x0 + 3.0; x += 0.6) B.push(M.metalDark, place(rbox(0.01, 2.9, 0.005, 0.002, 1), x, wy - 0.333, Z + 0.05));
-    for (let x = x1 - 3.2 + 0.64; x < x1; x += 0.64) B.push(M.metalDark, place(rbox(0.01, 2.9, 0.005, 0.002, 1), x, wy - 0.333, Z + 0.05));
+    for (let x = x0 + 0.6; x < x0 + 3.0; x += 0.6) B.push(M.metalDark, place(rbox(0.01, 2.9, 0.005, 0.002, 1), x, wy - 0.333, Z + 1.5));
+    for (let x = x1 - 3.2 + 0.64; x < x1; x += 0.64) B.push(M.metalDark, place(rbox(0.01, 2.9, 0.005, 0.002, 1), x, wy - 0.333, Z + 1.5));
     // centre run: base units, dark stone counter + splash, open shelves with LED
     const cx0 = x0 + 3.0, cx1 = x1 - 3.2, cmid = (cx0 + cx1) / 2, cw = cx1 - cx0;
-    B.push(M.walnut, place(rbox(cw, 0.86, 0.64, 0.01, 2), cmid, wy, Z));
-    B.push(M.darkStone, place(rbox(cw, 0.05, 0.68, 0.006, 1), cmid, wy - 0.02, Z + 0.86));
-    B.push(M.darkStone, place(rbox(cw, 0.9, 0.03, 0.004, 1), cmid, wy + 0.3, Z + 0.91));
+    B.push(M.walnut, place(rbox(cw, 0.86, 0.64, 0.01, 2), cmid, wy, Z + 0.43));
+    B.push(M.darkStone, place(rbox(cw, 0.05, 0.68, 0.006, 1), cmid, wy - 0.02, Z + 0.885));
+    B.push(M.darkStone, place(rbox(cw, 0.9, 0.03, 0.004, 1), cmid, wy + 0.3, Z + 1.36));
     for (let k = 0; k < 2; k++) {
       const zz = Z + 1.95 + k * 0.5;
       B.push(M.walnut, place(rbox(cw, 0.04, 0.32, 0.006, 1), cmid, wy + 0.15, zz));
@@ -319,7 +322,7 @@ export function buildInterior(ctx) {
     }
     B.push(M.ledSoft, place(rbox(cw - 0.1, 0.006, 0.01, 0.002, 1), cmid, wy + 0.0, Z + 1.82));
     // upper cabinets above the shelves, up to the ceiling
-    B.push(M.walnut, place(rbox(x1 - x0, 1.2, 0.66, 0.01, 2), (x0 + x1) / 2, wy, Z + 3.0));
+    B.push(M.walnut, place(rbox(x1 - x0, 1.1, 0.66, 0.01, 2), (x0 + x1) / 2, wy, Z + 3.55));
     // island pendants: three opal globes
     for (let i = -1; i <= 1; i++) {
       B.push(M.lampShade, place(new THREE.SphereGeometry(0.16, 24, 16), kx + i * 1.3, iy, Z + 2.25));
@@ -331,11 +334,41 @@ export function buildInterior(ctx) {
   // ===================== ENTRY HALL =======================================
   {
     B.push(M.walnut, place(rbox(1.9, 0.08, 0.42, 0.01, 2), 3.0, 8.9, Z + 0.78));
-    B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 2.4, 8.9, Z));
-    B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 3.6, 8.9, Z));
+    B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 2.4, 8.9, Z + 0.39));
+    B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 3.6, 8.9, Z + 0.39));
     B.push(M.ceramicDark, place(new THREE.LatheGeometry([V2(0, 0), V2(0.12, 0), V2(0.18, 0.2), V2(0.1, 0.5), V2(0.06, 0.56), V2(0, 0.56)], 32), 2.6, 8.9, Z + 0.86));
     lights.push([3.0, 8.4, Z + 3.4, 6, 10]);
     lights.push([6.5, 8.8, Z + 3.2, 4, 8]);
+  }
+
+  // ===================== UPPER FLOOR (seen through the glazing) ==========
+  {
+    const U = LEVEL.upper;
+    const bed = (x, y, rot) => {
+      const parts = [
+        [M.walnut, at(rbox(2.2, 0.3, 2.3, 0.03, 3), 0, 0.15, 0)],
+        [M.linen, at(rbox(2.1, 0.26, 2.1, 0.1, 4), 0, 0.43, 0.05)],
+        [M.walnut, at(rbox(2.4, 1.1, 0.12, 0.03, 3), 0, 0.55, -1.15)],
+        [M.boucle, at(rbox(0.7, 0.3, 0.16, 0.06, 4), -0.5, 0.7, -0.92)],
+        [M.boucle, at(rbox(0.7, 0.3, 0.16, 0.06, 4), 0.5, 0.7, -0.92)],
+        [M.rug, at(rbox(3.4, 0.015, 2.8, 0.005, 1), 0, 0.008, 0.3)],
+      ];
+      for (const [m, g] of parts) B.push(m, place(g, x, y, U, rot));
+      B.push(M.lampShade, place(new THREE.SphereGeometry(0.12, 20, 14), x - 1.45 * Math.cos(rot), y - 1.45 * Math.sin(rot), U + 0.62));
+    };
+    bed(-10.8, -1.8, 0); // west suite, faces the sea
+    bed(9.6, -1.4, 0); // east suite
+    // landing lounge by the atrium
+    const chair = (x, y, rot) => {
+      const g1 = rbox(0.85, 0.36, 0.8, 0.12, 5); at(g1, 0, 0.18, 0);
+      const g2 = rbox(0.85, 0.46, 0.18, 0.09, 5); at(g2, 0, 0.5, -0.32);
+      for (const g of [g1, g2]) B.push(M.boucle, place(g, x, y, U, rot));
+    };
+    chair(1.6, -3.8, Math.PI);
+    chair(3.0, -3.9, Math.PI);
+    B.push(M.darkStone, place(new THREE.CylinderGeometry(0.4, 0.4, 0.34, 40), 2.3, -2.6, U + 0.17));
+    lights.push([-10.8, -2.4, U + 2.6, 4, 9]);
+    lights.push([9.6, -2.0, U + 2.6, 4, 9]);
   }
 
   B.flush(root);
@@ -343,7 +376,7 @@ export function buildInterior(ctx) {
   // ===================== interior lights ====================================
   if (quality.interiorLights !== false) {
     for (const [x, y, z, intensity, dist] of lights) {
-      const l = new THREE.PointLight(new THREE.Color(1.0, 0.72, 0.44), intensity * 2.2, dist * 1.3, 2);
+      const l = new THREE.PointLight(new THREE.Color(1.0, 0.64, 0.36), intensity * 2.6, dist * 1.4, 2);
       l.position.set(x, z, -y);
       root.add(l);
     }

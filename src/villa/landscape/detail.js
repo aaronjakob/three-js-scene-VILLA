@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Simplex, mulberry32 } from '../core/noise.js';
 import { GLSL_NOISE } from '../core/noise.js';
-import { pointInPoly, offset, smooth, ccw, DECK_PTS, COURT, FIREPIT, FIRE_STAIR_PTS } from '../architecture/plan.js';
+import { pointInPoly, offset, smooth, ccw, deckOutline, poolOutline, COURT, FIREPIT, FIRE_STAIR_PTS } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
 
 // Limestone boulders and sea stacks: displaced icosahedra (several seeds),
@@ -88,13 +88,15 @@ export function buildLandscapeDetail(ctx) {
   const k = quality.rocks ?? 1;
   const rng = mulberry32(99);
   const nz = new Simplex(13);
-  const deck = offset(ccw(smooth(DECK_PTS, 160)), 1.0);
+  const deck = offset(deckOutline(), 1.0);
   const variants = [0, 1, 2, 3, 4, 5].map((i) => rockGeometry(i * 17 + 3, i < 3 ? 4 : 3));
   const variantsLow = [0, 1, 2, 3, 4, 5].map((i) => rockGeometry(i * 17 + 3, 2));
   const buckets = variants.map(() => []);
   const bucketsLow = variants.map(() => []);
+  const poolPad = offset(poolOutline(), 1.2);
   const blocked = (x, y) =>
     pointInPoly(x, y, deck) ||
+    pointInPoly(x, y, poolPad) ||
     Math.hypot(x - COURT.cx, y - COURT.cy) < COURT.r + 0.5 ||
     Math.hypot(x - FIREPIT.cx, y - FIREPIT.cy) < FIREPIT.r + 0.4 ||
     polyProject(FIRE_STAIR_PTS, x, y).d < 1.4 ||
@@ -120,7 +122,7 @@ export function buildLandscapeDetail(ctx) {
     put(x, y, h - s * 0.25, s, big ? 0.9 + rng() * 0.8 : 0.7 + rng() * 0.4);
   }
   // 2) cliff outcrops on steep faces near the villa (0..140 m)
-  const N2 = Math.round(2400 * k);
+  const N2 = Math.round(3600 * k);
   for (let i = 0; i < N2; i++) {
     const x = (rng() * 2 - 1) * 140;
     const y = -8 - rng() * 50;

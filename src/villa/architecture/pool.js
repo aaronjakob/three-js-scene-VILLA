@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { LEVEL } from '../core/world.js';
 import { atmosphereUniforms, GLSL_SKY, GLSL_HAZE, hazeUniforms } from '../render/atmosphere.js';
-import { offset, ellipse, resample, pointInPoly, FIREPIT, FIRE_STAIR_PTS, smooth } from './plan.js';
+import { offset, ellipse, resample, pointInPoly, FIREPIT, FIRE_STAIR_PTS, smooth, WATERFALL_SPILL } from './plan.js';
 import { slabGeometry, capGeometry, stripGeometry, sweepRect, merge, box, tubeAlong } from './geo.js';
 import { polyProject } from '../landscape/terrain.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const WATER_Z = 17.962;
 const V2 = (x, y) => new THREE.Vector2(x, y);
@@ -176,16 +177,19 @@ export function buildPool(ctx, root, M, plan) {
   const inner = pool;
   const outer = offset(inner, 0.34);
   const n = inner.length;
-  const isInfinity = [];
+  // spill point: pool sample nearest the waterfall anchor; outward normal there
+  const SP = V2(...WATERFALL_SPILL);
+  let si = 0;
+  for (let i = 0; i < n; i++) if (inner[i].distanceTo(SP) < inner[si].distanceTo(SP)) si = i;
+  const TIP = inner[si].clone();
+  const normals = [];
   for (let i = 0; i < n; i++) {
     const a = inner[(i - 1 + n) % n], b = inner[(i + 1) % n];
     const t = new THREE.Vector2().subVectors(b, a).normalize();
-    // outward normal for CCW = (t.y, -t.x)
-    const no = new THREE.Vector2(t.y, -t.x);
-    isInfinity.push(no.y < -0.35 && inner[i].x > -9.2 && inner[i].x < 10.0);
+    normals.push(new THREE.Vector2(t.y, -t.x)); // outward for CCW
   }
-  const TIP = V2(-10.15, -12.6);
-  const isSpill = inner.map((p) => p.distanceTo(TIP) < 0.75);
+  const isSpill = inner.map((p) => p.distanceTo(TIP) < 1.35);
+  const isInfinity = inner.map((p, i) => normals[i].y < -0.3 && !isSpill[i] && Math.abs(p.x) < 13.6);
 
   // --- tub: ring wall with per-sample rim height --------------------------
   {
@@ -222,7 +226,7 @@ export function buildPool(ctx, root, M, plan) {
     tub.material = M.slab.clone();
     tub.material.side = THREE.DoubleSide;
     // sculpted soffit under the cantilever
-    add(slabGeometry(offset(inner, 0.3), [], 16.4, 0.9, { bevel: 0.4, segments: 7 }), M.slab, { name: 'pool-soffit' });
+    add(slabGeometry(offset(inner, 0.32), [], 16.42, 0.45, { bevel: 0.16, segments: 5 }), M.slab, { name: 'pool-soffit' });
   }
 
   // --- interior: tile floor + walls with caustics ------------------------
@@ -271,11 +275,11 @@ export function buildPool(ctx, root, M, plan) {
   }
 
   // --- waterfall at the west tip ------------------------------------------
-  const dir = new THREE.Vector2(-0.42, -0.91).normalize(); // plan: SSW
+  const dir = normals[si].clone().normalize();
   const start = TIP.clone().addScaledVector(dir, 0.36);
   {
     const segs = 40;
-    const width0 = 1.8, width1 = 2.7;
+    const width0 = 2.6, width1 = 3.6;
     const pos = [], uv = [], idx = [];
     const v0 = 1.2; // m/s horizontal
     const topY = WATER_Z, botY = 8.72;
@@ -307,15 +311,20 @@ export function buildPool(ctx, root, M, plan) {
     const fallMat = sheetMaterial({ speed: 1.6, density: 3.0, opacity: 0.85, tint: [0.85, 0.94, 0.95] });
     const fall = add(g, fallMat, { cast: false, receive: false, name: 'waterfall' });
     fall.renderOrder = 4;
-    // second, slightly offset layer for thickness
+    // two more offset layers for body and spray
     const g2 = g.clone();
-    g2.translate(dir.x * 0.08, 0, -dir.y * 0.08);
+    g2.translate(dir.x * 0.1, 0, -dir.y * 0.1);
     const fall2 = add(g2, sheetMaterial({ speed: 2.1, density: 4.5, opacity: 0.55, tint: [0.9, 0.97, 0.98] }), { cast: false, receive: false, name: 'waterfall-2' });
     fall2.renderOrder = 4;
+    const g3 = g.clone();
+    g3.scale(1, 1, 1);
+    g3.translate(-dir.x * 0.12, 0, dir.y * 0.12);
+    const fall3 = add(g3, sheetMaterial({ speed: 1.2, density: 2.2, opacity: 0.4, tint: [0.75, 0.88, 0.9] }), { cast: false, receive: false, name: 'waterfall-3' });
+    fall3.renderOrder = 4;
     // the notch in the rim where water leaves
     // basin at the foot (z ~ 8.7) with foam ring
     const bx = start.x + dir.x * v0 * T, by = start.y + dir.y * v0 * T;
-    const basin = ellipse(bx + dir.x * 0.6, by + dir.y * 0.6, 2.6, 2.0, 48, Math.atan2(dir.y, dir.x));
+    const basin = ellipse(bx + dir.x * 0.6, by + dir.y * 0.6, 3.4, 2.6, 64, Math.atan2(dir.y, dir.x));
     const bw = add(capGeometry(basin, [], 8.7, 1), createPoolWaterMaterial(), { cast: false, receive: false, name: 'basin-water' });
     bw.material.uniforms = { ...bw.material.uniforms };
     bw.renderOrder = 3;
@@ -325,6 +334,34 @@ export function buildPool(ctx, root, M, plan) {
     );
     foam.renderOrder = 5;
     root.add(foam);
+    // spray / mist at the plunge: soft particles
+    {
+      const c = document.createElement('canvas');
+      c.width = c.height = 64;
+      const x2 = c.getContext('2d');
+      const gr = x2.createRadialGradient(32, 32, 0, 32, 32, 32);
+      gr.addColorStop(0, 'rgba(255,255,255,0.55)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      x2.fillStyle = gr;
+      x2.fillRect(0, 0, 64, 64);
+      const tex = new THREE.CanvasTexture(c);
+      const N = 90;
+      const pos = new Float32Array(N * 3);
+      let r = 7;
+      const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
+      for (let i = 0; i < N; i++) {
+        const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * 1.8;
+        pos[i * 3] = bx + Math.cos(a) * rr;
+        pos[i * 3 + 1] = 8.8 + rnd() * rnd() * 3.2;
+        pos[i * 3 + 2] = -(by + Math.sin(a) * rr);
+      }
+      const pg = new THREE.BufferGeometry();
+      pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+      const mist = new THREE.Points(pg, new THREE.PointsMaterial({ map: tex, size: 1.6, sizeAttenuation: true, transparent: true, opacity: 0.35, depthWrite: false, color: new THREE.Color(0.9, 0.95, 0.97), fog: false }));
+      mist.renderOrder = 6;
+      mist.name = 'waterfall-mist';
+      root.add(mist);
+    }
     // uplight in the basin (photo reference: lit cascade)
     const up = new THREE.PointLight(new THREE.Color(1.0, 0.82, 0.6), 18, 14, 2);
     up.position.set(bx + dir.x * 1.2, 9.4, -(by + dir.y * 1.2));
@@ -356,8 +393,8 @@ export function buildPool(ctx, root, M, plan) {
     const cush = [];
     for (let i = 0; i < 9; i++) {
       const a = a0 + (a1 - a0) * ((i + 0.5) / 9);
-      const g = new THREE.SphereGeometry(0.24, 18, 12);
-      g.scale(1.0, 0.85, 0.42);
+      const g = new RoundedBoxGeometry(0.5, 0.42, 0.16, 4, 0.07);
+      g.rotateX(-0.25);
       g.rotateY(-a + Math.PI / 2);
       g.translate(fp.cx + Math.cos(a) * 3.0, fp.z + 0.78, -(fp.cy + Math.sin(a) * 3.0));
       cush.push(g);
@@ -403,22 +440,26 @@ export function buildPool(ctx, root, M, plan) {
       const mid = a.clone().lerp(b, 0.5);
       const ang = Math.atan2(b.y - a.y, b.x - a.x);
       const z = LEVEL.main - (i + 1) * rise;
-      geos.push(box(a.distanceTo(b) + 0.06, 1.5, 0.1, mid.x, mid.y, z - 0.1, ang));
-      geos.push(box(a.distanceTo(b) * 0.98, 1.4, rise + 0.25, mid.x, mid.y, z - rise - 0.25, ang));
+      geos.push(box(a.distanceTo(b) + 0.04, 1.4, 0.07, mid.x, mid.y, z - 0.07, ang));
       leds.push(box(0.02, 1.36, 0.012, a.x + Math.cos(ang) * 0.04, a.y + Math.sin(ang) * 0.04, z - 0.115, ang));
       stairWalk.push({ x: mid.x, y: mid.y, z });
     }
     add(merge(geos), M.deckLow, { name: 'fire-stair' });
+    // central steel stringer following the flight, cut into the rock below
+    const strPts = resample(path, 0.4);
+    const strZ = strPts.map((_, i) => LEVEL.main - 0.25 - (i / (strPts.length - 1)) * (LEVEL.main - fp.z));
+    root.add(Object.assign(new THREE.Mesh(tubeAlong(strPts, strZ, 0.09, { radial: 6, tubular: 120 }), M.metalDark), { castShadow: true }));
     root.add(new THREE.Mesh(merge(leds), M.ledSoft));
     // seaward side low wall
-    const side = offsetOpenOut(path, -0.82);
+    const side = offsetOpenOut(path, -0.68);
     const sideZ = side.map((_, i) => LEVEL.main - (i / (side.length - 1)) * (LEVEL.main - fp.z));
-    for (let i = 0; i < side.length - 1; i += 1) {
+    for (let i = 0; i < side.length - 1; i += 5) {
       const a = side[i], b = side[i + 1];
       const ang = Math.atan2(b.y - a.y, b.x - a.x);
-      curb.push(box(a.distanceTo(b) + 0.05, 0.22, 0.55, (a.x + b.x) / 2, (a.y + b.y) / 2, (sideZ[i] + sideZ[i + 1]) / 2 - 0.2, ang));
+      curb.push(box(0.03, 0.03, 0.95, a.x, a.y, sideZ[i] - 0.1, ang));
     }
-    add(merge(curb), M.travertineWall, { name: 'stair-curb' });
+    add(merge(curb), M.metalDark, { name: 'stair-posts' });
+    root.add(Object.assign(new THREE.Mesh(tubeAlong(side, sideZ.map((z) => z + 0.85), 0.022, { radial: 6, tubular: 120 }), M.metalDark), { castShadow: true }));
   }
 
   // colliders: firepit terrace edge (open where the stair arrives and to the sofa)

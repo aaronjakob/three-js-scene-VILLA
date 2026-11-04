@@ -50,10 +50,14 @@ vec2 waveLayer(vec2 p, float scale, float ang, vec2 drift) {
 }
 vec2 waveSlope(vec2 p) {
   vec2 s = vec2(0.0);
+  // slow, large-scale modulation so no layer repeats visibly
+  float m1 = 0.55 + 0.9 * vh_vnoise2(p * 0.004 + 3.0);
+  float m2 = 0.55 + 0.9 * vh_vnoise2(p * 0.011 - 7.0);
+  float m3 = 0.55 + 0.9 * vh_vnoise2(p * 0.027 + 11.0);
   s += waveLayer(p, 97.0, 0.2, vec2(0.0019, 0.0011)) * 0.105;
-  s += waveLayer(p, 31.0, 1.9, vec2(-0.0047, 0.0029)) * 0.075;
-  s += waveLayer(p, 10.3, 3.7, vec2(0.0105, -0.0078)) * 0.05;
-  s += waveLayer(p, 3.3, 5.1, vec2(-0.0250, -0.0160)) * 0.032;
+  s += waveLayer(p, 31.0, 1.9, vec2(-0.0047, 0.0029)) * 0.075 * m1;
+  s += waveLayer(p, 10.3, 3.7, vec2(0.0105, -0.0078)) * 0.05 * m2;
+  s += waveLayer(p, 3.3, 5.1, vec2(-0.0250, -0.0160)) * 0.032 * m3;
   // long, slow swell from the south-south-west
   vec2 d1 = normalize(vec2(0.25, 1.0));
   vec2 d2 = normalize(vec2(-0.45, 1.0));

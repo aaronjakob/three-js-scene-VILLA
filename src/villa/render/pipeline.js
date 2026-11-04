@@ -166,15 +166,15 @@ export class Pipeline {
     this.compQuad = new FullScreenQuad(this.compMat);
 
     if (quality.bloom) {
-      this.bloom = new UnrealBloomPass(new THREE.Vector2(2, 2), 0.14, 0.45, 2.4);
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(2, 2), 0.12, 0.4, 3.0);
     }
 
     this.grade = {
-      exposure: 1.35,
-      saturation: 1.06,
-      contrast: 0.12,
-      lift: new THREE.Vector3(0.004, 0.006, 0.012),
-      gain: new THREE.Vector3(1.0, 1.0, 1.0),
+      exposure: 1.6,
+      saturation: 1.1,
+      contrast: 0.14,
+      lift: new THREE.Vector3(0.006, 0.004, 0.0),
+      gain: new THREE.Vector3(1.04, 1.0, 0.93),
       vignette: 0.16,
       tonemap: 1,
     };

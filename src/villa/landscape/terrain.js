@@ -132,6 +132,9 @@ export class TerrainField {
       const n = this.n;
       h += face * (1.5 * n.fbm2(x / 6.5, y / 6.5, 3) + 0.6 * n.fbm2(x / 2.2, y / 2.2, 2));
     }
+    // seat the lower firepit terrace (no ground poking through its floor)
+    const fd = Math.hypot(x - 13.25, y + 18.65);
+    if (fd < 5.6) h = Math.min(h, lerp(11.9, h, smoothstep(4.7, 5.6, fd)));
     // carve below the firepit stair
     const st = polyProject(STAIR.pts, x, y);
     if (st.d < 2.2) {
@@ -376,15 +379,19 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   float fineFade = 1.0 - smoothstep(40.0, 220.0, dist);
   float n3 = (fineFade > 0.0 ? vh_noise3(wp * 1.3) : 0.0) * fineFade;
   float rockMask = smoothstep(0.26, 0.48, slope + n1 * 0.26 + n2 * 0.1);
-  rockMask *= 1.0 - smoothstep(60.0, 160.0, h) * 0.75;
+  rockMask *= 1.0 - smoothstep(30.0, 120.0, h) * 0.85;
+  // the sea cliff under the villa reads as continuous limestone down to the surf
+  float cliffZone = 1.0 - smoothstep(40.0, 75.0, length(wp.xz - vec2(0.0, 26.0)));
+  float cliffK = cliffZone * smoothstep(0.06, 0.16, slope + n2 * 0.08) * (1.0 - smoothstep(15.5, 17.2, h));
+  rockMask = max(rockMask, cliffK);
   float shore = 1.0 - smoothstep(0.4, 3.2 + n1 * 2.0, h);
   rockMask = max(rockMask, shore);
   float underwater = 1.0 - smoothstep(-1.2, 0.2, h);
   // forest canopy / maquis colour
   float clump = vh_fbm3(wp * 0.16 + 4.0, 2);
-  vec3 vegA = vec3(0.020, 0.040, 0.018);
-  vec3 vegB = vec3(0.050, 0.078, 0.030);
-  vec3 vegC = vec3(0.090, 0.098, 0.050);
+  vec3 vegA = vec3(0.030, 0.055, 0.022);
+  vec3 vegB = vec3(0.070, 0.100, 0.040);
+  vec3 vegC = vec3(0.120, 0.128, 0.065);
   vec3 veg = mix(vegA, vegB, smoothstep(-0.25, 0.35, clump));
   veg = mix(veg, vegC, smoothstep(0.15, 0.55, n2) * 0.45);
   // dry earth / scrub patches on gentle slopes
@@ -392,9 +399,9 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   veg = mix(veg, vec3(0.16, 0.14, 0.09), dry * 0.35);
   // limestone
   float strata = 0.5 + 0.5 * sin(wp.y * 2.1 + n1 * 7.0 + n2 * 2.0);
-  vec3 rockA = vec3(0.44, 0.42, 0.385);
-  vec3 rockB = vec3(0.25, 0.24, 0.225);
-  vec3 rockC = vec3(0.56, 0.53, 0.48);
+  vec3 rockA = vec3(0.38, 0.36, 0.325);
+  vec3 rockB = vec3(0.21, 0.20, 0.185);
+  vec3 rockC = vec3(0.46, 0.43, 0.38);
   vec3 rockCol = mix(rockB, rockA, smoothstep(-0.25, 0.35, n2 + n3 * 0.5));
   rockCol = mix(rockCol, rockC, strata * 0.22 + smoothstep(0.3, 0.6, n1) * 0.2);
   // dark weathering streaks running down the face
@@ -402,6 +409,8 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   rockCol *= 1.0 - 0.28 * smoothstep(0.1, 0.5, streak) * smoothstep(0.35, 0.7, slope);
   // vegetation clinging to ledges on the cliff
   float ledgeVeg = smoothstep(0.1, 0.5, n2 + 0.2) * (1.0 - smoothstep(0.35, 0.7, slope)) * (1.0 - shore);
+  // the sun-facing sea cliff: darker, weathered, with vegetated ledges
+  rockCol *= mix(1.0, 0.72 + 0.28 * smoothstep(-0.3, 0.4, n1), cliffK);
   vec3 col = mix(veg, rockCol, rockMask);
   col = mix(col, veg * 1.1, ledgeVeg * rockMask * 0.6);
   // wet dark band at the waterline

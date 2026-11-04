@@ -396,7 +396,7 @@ export function foliageAtlas() {
     ctx.restore();
   };
   const green = (l, sat = 1, warm = 0) => {
-    const r = (62 + warm * 34) * l, g = (104 + warm * 12) * l * sat + 50 * (1 - sat), b = 40 * l;
+    const r = (74 + warm * 34) * l, g = (122 + warm * 12) * l * sat + 50 * (1 - sat), b = 42 * l;
     return `rgb(${r | 0},${g | 0},${b | 0})`;
   };
   // cell 0: broadleaf cluster (holm oak / laurel) top-left
@@ -450,7 +450,7 @@ export function foliageAtlas() {
         const a = baseAng + (i / n) * Math.PI * 2 + (rng() - 0.5) * 0.3;
         const len = 30 + rng() * 34;
         const l = 0.5 + rng() * 0.6;
-        ctx.strokeStyle = `rgb(${(52 * l) | 0},${(88 * l) | 0},${(44 * l) | 0})`;
+        ctx.strokeStyle = `rgb(${(66 * l) | 0},${(104 * l) | 0},${(50 * l) | 0})`;
         ctx.lineWidth = 2.2;
         ctx.beginPath(); ctx.moveTo(cx, cy);
         ctx.lineTo(cx + Math.cos(a) * len, cy + Math.sin(a) * len * 0.8);
@@ -475,10 +475,11 @@ export function foliageAtlas() {
       const l = 0.6 + rng() * 0.7;
       leaf(px, py, 18 + rng() * 14, 9 + rng() * 6, rng() * Math.PI * 2, green(l, 1.05), true);
     }
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 70; i++) {
       const px = cx + (rng() - 0.5) * half * 0.8;
       const py = oy + 20 + rng() * (half - 40);
-      ctx.fillStyle = rng() < 0.5 ? 'rgb(236,232,226)' : 'rgb(176,150,206)';
+      const r0 = rng();
+      ctx.fillStyle = r0 < 0.35 ? 'rgb(236,232,226)' : r0 < 0.75 ? 'rgb(168,120,200)' : 'rgb(196,96,170)';
       for (let p = 0; p < 5; p++) {
         const a = (p / 5) * Math.PI * 2;
         ctx.beginPath();

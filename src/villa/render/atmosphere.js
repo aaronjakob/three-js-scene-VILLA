@@ -43,12 +43,12 @@ vec3 vh_skyBase(vec3 d) {
   float mu = dot(d, uSunDir);
   float muc = max(mu, 0.0);
   // broad champagne glow toward the sun, strongest at the horizon
-  vec3 sunTint = vec3(1.0, 0.88, 0.66);
+  vec3 sunTint = vec3(1.0, 0.86, 0.58);
   float horizonW = exp(-hp * 7.0);
   col += sunTint * (pow(muc, 7.0) * 0.30 * (0.30 + 0.70 * horizonW));
   col += sunTint * pow(muc, 64.0) * 0.35;
   col += vec3(1.0, 0.93, 0.80) * pow(muc, 900.0) * 1.0;
-  col += vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 14.0;
+  col += vec3(1.0, 0.90, 0.62) * smoothstep(0.99994, 0.99997, mu) * 12.0;
   // very subtle warm band hugging the horizon all around the sun side
   col = mix(col, vec3(0.95, 0.90, 0.80), exp(-hp * 45.0) * (0.15 + 0.35 * pow(mu * 0.5 + 0.5, 4.0)));
   // anti-solar side slightly cooler/pinker-free blue
@@ -95,7 +95,7 @@ vec3 vh_sky(vec3 d, bool withSun) {
   if (!withSun) {
     float mu = dot(dir, uSunDir);
     col -= vec3(1.0, 0.93, 0.80) * pow(max(mu, 0.0), 900.0) * 1.0;
-    col -= vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 14.0;
+    col -= vec3(1.0, 0.90, 0.62) * smoothstep(0.99994, 0.99997, mu) * 12.0;
   }
   vec4 cl = vh_clouds(dir);
   col = mix(col, cl.rgb * (0.6 + 0.4 * vh_skyBase(normalize(dir + vec3(0.0, 0.4, 0.0))).b / 0.7), cl.a);

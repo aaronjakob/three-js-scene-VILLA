@@ -29,17 +29,17 @@ export function materials(quality) {
   const cob = T.cobbles();
   const bk = T.bark();
 
-  const warmLED = new THREE.Color(1.0, 0.70, 0.40);
+  const warmLED = new THREE.Color(1.0, 0.62, 0.30); // ~2700 K
 
   lib = {
     floorPolished: new THREE.MeshPhysicalMaterial({
       name: 'travertine-polished',
       map: rep(trav.map, 1 / 2.4),
       roughnessMap: rep(trav.roughnessMap, 1 / 2.4),
-      roughness: 0.36,
+      roughness: 0.44,
       metalness: 0,
-      clearcoat: 0.15,
-      clearcoatRoughness: 0.25,
+      clearcoat: 0.05,
+      clearcoatRoughness: 0.3,
       envMapIntensity: 0.45,
     }),
     deck: new THREE.MeshStandardMaterial({
@@ -58,13 +58,13 @@ export function materials(quality) {
     slab: new THREE.MeshStandardMaterial({
       name: 'slab-white',
       map: rep(slab.map, 1 / 6),
-      color: new THREE.Color(0.93, 0.91, 0.87),
+      color: new THREE.Color(0.88, 0.85, 0.80),
       roughness: 0.58,
       envMapIntensity: 0.9,
     }),
     ceiling: new THREE.MeshStandardMaterial({
       name: 'plaster-ceiling',
-      color: new THREE.Color(0.84, 0.78, 0.70),
+      color: new THREE.Color(0.80, 0.70, 0.58),
       roughness: 0.92,
       envMapIntensity: 0.25,
     }),
@@ -190,18 +190,18 @@ export function materials(quality) {
       color: new THREE.Color(0.62, 0.6, 0.56),
       roughness: 0.85,
     }),
-    led: new THREE.MeshBasicMaterial({ name: 'led-2700k', color: warmLED.clone().multiplyScalar(9) }),
-    ledSoft: new THREE.MeshBasicMaterial({ name: 'led-soft', color: warmLED.clone().multiplyScalar(3.2) }),
+    led: new THREE.MeshBasicMaterial({ name: 'led-2700k', color: warmLED.clone().multiplyScalar(3.2) }),
+    ledSoft: new THREE.MeshBasicMaterial({ name: 'led-soft', color: warmLED.clone().multiplyScalar(1.6) }),
     lampShade: new THREE.MeshStandardMaterial({
       name: 'opal-glass',
       color: 0xffffff,
-      emissive: new THREE.Color(1.0, 0.76, 0.5),
-      emissiveIntensity: 4.5,
+      emissive: new THREE.Color(1.0, 0.64, 0.34),
+      emissiveIntensity: 2.0,
       roughness: 0.4,
     }),
-    screen: new THREE.MeshBasicMaterial({ name: 'screen', map: T.screenTexture(1), color: new THREE.Color(0.75, 0.75, 0.75) }),
-    screen2: new THREE.MeshBasicMaterial({ name: 'screen2', map: T.screenTexture(2), color: new THREE.Color(0.75, 0.75, 0.75) }),
-    screen3: new THREE.MeshBasicMaterial({ name: 'screen3', map: T.screenTexture(3), color: new THREE.Color(0.75, 0.75, 0.75) }),
+    screen: new THREE.MeshBasicMaterial({ name: 'screen', map: T.screenTexture(1), color: new THREE.Color(2.2, 2.2, 2.4) }),
+    screen2: new THREE.MeshBasicMaterial({ name: 'screen2', map: T.screenTexture(2), color: new THREE.Color(2.2, 2.2, 2.4) }),
+    screen3: new THREE.MeshBasicMaterial({ name: 'screen3', map: T.screenTexture(3), color: new THREE.Color(2.2, 2.2, 2.4) }),
     monitorBody: new THREE.MeshStandardMaterial({ name: 'monitor', color: new THREE.Color(0.03, 0.03, 0.035), roughness: 0.4, metalness: 0.3 }),
     books: new THREE.MeshStandardMaterial({ name: 'books', map: T.bookSpines(), roughness: 0.8 }),
     ceramic: new THREE.MeshStandardMaterial({ name: 'ceramic', color: new THREE.Color(0.78, 0.74, 0.68), roughness: 0.5 }),

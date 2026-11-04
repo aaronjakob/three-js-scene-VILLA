@@ -101,12 +101,12 @@ export function buildSite(ctx, root, M) {
   };
   // east terrace loungers facing south-east (toward the sea / sun)
   const ang = Math.atan2(-0.55, 0.83);
-  lounger(13.2, -10.2, ang + Math.PI);
-  lounger(14.5, -11.2, ang + Math.PI);
-  lounger(15.8, -12.2, ang + Math.PI);
+  lounger(17.0, -9.2, ang + Math.PI);
+  lounger(18.1, -10.6, ang + Math.PI);
+  lounger(19.1, -12.0, ang + Math.PI);
   // low side tables
   const tables = [];
-  for (const [x, y] of [[13.85, -10.8], [15.15, -11.8]]) {
+  for (const [x, y] of [[17.55, -9.9], [18.6, -11.3]]) {
     const t = new THREE.CylinderGeometry(0.22, 0.2, 0.42, 32);
     t.translate(x, LEVEL.main + 0.21, -y);
     tables.push(t);
