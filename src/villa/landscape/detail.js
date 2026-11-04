@@ -3,13 +3,18 @@ import { Simplex, mulberry32 } from '../core/noise.js';
 import { GLSL_NOISE } from '../core/noise.js';
 import { pointInPoly, offset, smooth, ccw, deckOutline, poolOutline, COURT, FIREPIT, FIRE_STAIR_PTS } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
+import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
 // Limestone boulders and sea stacks: displaced icosahedra (several seeds),
 // stratified, with a triplanar-ish procedural rock shader. Placed along the
 // waterline, on the cliff under the villa, and as garden boulders.
 
 function rockGeometry(seed, detail = 4) {
-  const g = new THREE.IcosahedronGeometry(1, detail);
+  // weld the icosphere so displaced normals are smooth (not faceted)
+  let g = new THREE.IcosahedronGeometry(1, detail);
+  g.deleteAttribute('normal');
+  g.deleteAttribute('uv');
+  g = mergeVertices(g, 1e-4);
   const s = new Simplex(seed);
   const pos = g.attributes.position;
   const ao = new Float32Array(pos.count);

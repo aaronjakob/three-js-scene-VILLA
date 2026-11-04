@@ -380,6 +380,8 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   float n3 = (fineFade > 0.0 ? vh_noise3(wp * 1.3) : 0.0) * fineFade;
   float rockMask = smoothstep(0.26, 0.48, slope + n1 * 0.26 + n2 * 0.1);
   rockMask *= 1.0 - smoothstep(30.0, 120.0, h) * 0.85;
+  // inland of the house (graded drive cuts, hill): scrub, not bare rock
+  rockMask *= mix(1.0, 0.12, smoothstep(-12.0, -30.0, wp.z) * (1.0 - smoothstep(60.0, 140.0, h)));
   // the sea cliff under the villa reads as continuous limestone down to the surf
   float cliffZone = 1.0 - smoothstep(40.0, 75.0, length(wp.xz - vec2(0.0, 26.0)));
   float cliffK = cliffZone * smoothstep(0.06, 0.16, slope + n2 * 0.08) * (1.0 - smoothstep(15.5, 17.2, h));

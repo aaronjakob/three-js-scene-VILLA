@@ -3,7 +3,7 @@ import { mulberry32, Simplex, smoothstep } from '../core/noise.js';
 import { foliageAtlas } from '../materials/textures.js';
 import { materials } from '../materials/library.js';
 import { LEVEL } from '../core/world.js';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   smooth, offset, pointInPoly, distToPoly, ellipse, resample, ccw,
   deckOutline, poolOutline, L1_PTS, ROOF_PTS, UPPER_PTS, POOL_PTS, ATRIUM, COURT, DRIVE_PTS, FIREPIT, FIRE_STAIR_PTS,
@@ -652,7 +652,10 @@ function groundMaterial() {
 
 function buildFarForest(root, field, quality, nz) {
   const rng = mulberry32(777);
-  const base = new THREE.IcosahedronGeometry(1, 1);
+  let base = new THREE.IcosahedronGeometry(1, 1);
+  base.deleteAttribute('normal');
+  base.deleteAttribute('uv');
+  base = mergeVertices(base, 1e-4);
   const pos = base.attributes.position;
   const s3 = new Simplex(5);
   for (let i = 0; i < pos.count; i++) {
