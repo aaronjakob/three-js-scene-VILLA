@@ -34,6 +34,7 @@ let base = args.url;
 if (!base) {
   server = spawn('npx', ['vite', '--host', '127.0.0.1', '--port', '5179', '--strictPort'], {
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, VILLA_NO_HMR: '1' },
   });
   server.stderr.on('data', (d) => process.stderr.write(d));
   base = 'http://127.0.0.1:5179/';

@@ -336,7 +336,7 @@ export function buildPool(ctx, root, M, plan) {
   const terrace = ellipse(fp.cx, fp.cy, fp.r, fp.r, 96);
   add(slabGeometry(terrace, [], fp.z, 0.7, { bevel: 0.18 }), M.deckLow, { name: 'firepit-terrace' });
   // stone base merging into the rock
-  add(slabGeometry(ellipse(fp.cx, fp.cy, fp.r - 0.15, fp.r - 0.15, 64), [], fp.z - 0.65, 3.2, { bevel: 0.3 }), M.stoneWall, { name: 'firepit-base' });
+  add(slabGeometry(ellipse(fp.cx, fp.cy, fp.r - 0.2, fp.r - 0.2, 64), [], fp.z - 0.65, 1.4, { bevel: 0.3 }), M.stoneWall, { name: 'firepit-base' });
   // built-in curved sofa around the north-west 220 degrees, open to the sea
   {
     const arc = [];

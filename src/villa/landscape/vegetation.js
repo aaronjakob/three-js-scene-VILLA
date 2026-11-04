@@ -10,6 +10,26 @@ import {
 } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
 import { atmosphereUniforms } from '../render/atmosphere.js';
+import { VIEWS } from '../core/anchors.js';
+
+// Art-directed planting: no tree may stand in the sightline of an exterior
+// camera between the lens and its subject (shrubs stay).
+const SIGHTLINES = VIEWS.filter((v) => !v.interior).map((v) => ({ a: v.position, b: v.target }));
+function blocksSightline(x, y, z, height = 8) {
+  for (const { a, b } of SIGHTLINES) {
+    const ex = b[0] - a[0], ey = b[1] - a[1];
+    const L2 = ex * ex + ey * ey;
+    let t = ((x - a[0]) * ex + (y - a[1]) * ey) / L2;
+    if (t < 0.04 || t > 1.05) continue;
+    const px = a[0] + ex * t, py = a[1] + ey * t;
+    const d = Math.hypot(x - px, y - py);
+    const lineZ = a[2] + (b[2] - a[2]) * t;
+    if (z + height < lineZ - 2) continue;
+    const r = 3.5 + Math.sqrt(L2) * t * 0.12;
+    if (d < r) return true;
+  }
+  return false;
+}
 
 // ---------------------------------------------------------------------------
 // Procedural trees: tapered branch tubes + alpha-tested leaf cards with
@@ -106,7 +126,7 @@ function leafGeometry(arr) {
 const SPECIES = {
   pine: { height: [7, 11.5], trunkR: [0.18, 0.28], crown: 'umbrella', cell: ATLAS.needle, card: [1.0, 1.4], density: 46 },
   oak: { height: [4.2, 6.8], trunkR: [0.15, 0.24], crown: 'round', cell: ATLAS.broad, card: [0.85, 1.15], density: 62 },
-  olive: { height: [3.4, 5.0], trunkR: [0.17, 0.26], crown: 'open', cell: ATLAS.olive, card: [0.7, 0.95], density: 52 },
+  olive: { height: [3.4, 5.0], trunkR: [0.17, 0.26], crown: 'open', cell: ATLAS.olive, card: [0.8, 1.1], density: 85 },
   cypress: { height: [8, 11], trunkR: [0.12, 0.18], crown: 'column', cell: ATLAS.needle, card: [0.75, 1.0], density: 70 },
 };
 
@@ -247,20 +267,29 @@ export function makeShrub(seed, { cell = ATLAS.broad, size = 1.4, cards = 46, fl
   return leafGeometry(leaves);
 }
 
-// hanging vine strand: stacked ivy cards falling from (0,0,0) down to -len
+// hanging cascade: a dense cushion at the slab lip that thins into a few
+// tendrils (bougainvillea / jasmine habit), not a uniform curtain
 function vineStrand(rng, len) {
   const leaves = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-  const n = Math.max(2, Math.round(len / 0.32));
-  const c = new THREE.Vector3(0, -len / 2, 0.2);
-  let x = 0, z = 0;
-  for (let i = 0; i < n; i++) {
-    const y = -(i / n) * len - 0.15;
-    x += (rng() - 0.5) * 0.12;
-    z += (rng() - 0.5) * 0.08;
-    const s = 0.55 - (i / n) * 0.22 + rng() * 0.12;
-    for (let k = 0; k < 2; k++) {
-      const face = new THREE.Vector3((rng() - 0.5) * 0.9, (rng() - 0.5) * 0.4, 1).normalize();
-      pushCard(leaves, new THREE.Vector3(x + (rng() - 0.5) * 0.18, y, z + 0.08 + k * 0.05), face, s, ATLAS.ivy, rng, c, len * 0.6, 0.85);
+  const c = new THREE.Vector3(0, -len * 0.3, 0.25);
+  // cushion over the edge
+  for (let i = 0; i < 9; i++) {
+    const p = new THREE.Vector3((rng() - 0.5) * 0.9, -rng() * 0.45 + 0.05, 0.05 + rng() * 0.3);
+    const face = new THREE.Vector3((rng() - 0.5) * 0.8, 0.3 + rng() * 0.5, 1).normalize();
+    pushCard(leaves, p, face, 0.75 + rng() * 0.35, i % 3 ? ATLAS.ivy : ATLAS.broad, rng, c, len * 0.5, 1.0);
+  }
+  // 1-3 tendrils
+  const nT = 1 + Math.floor(rng() * 3);
+  for (let t = 0; t < nT; t++) {
+    let x = (rng() - 0.5) * 0.6, z = 0.12 + rng() * 0.15;
+    const L = len * (0.5 + rng() * 0.5);
+    const n = Math.max(2, Math.round(L / 0.3));
+    for (let i = 0; i < n; i++) {
+      const k = i / n;
+      x += (rng() - 0.5) * 0.08;
+      const y = -0.3 - k * L;
+      const face = new THREE.Vector3((rng() - 0.5) * 0.9, 0, 1).normalize();
+      pushCard(leaves, new THREE.Vector3(x, y, z), face, (0.55 - 0.25 * k) * (0.85 + rng() * 0.3), ATLAS.ivy, rng, c, len * 0.6, 0.8);
     }
   }
   return leafGeometry(leaves);
@@ -400,14 +429,16 @@ export function buildVegetation(ctx) {
     const nearSea = h < 6;
     if (slope > 0.72) continue;
     const r = rng();
-    if (slope < 0.5 && patch > -0.1 && r < 0.28) {
+    // keep the cliff below the pool, waterfall and firepit open to view (photos)
+    const viewCorridor = y < -11 && y > -70 && x > -18 && x < 26;
+    if (slope < 0.5 && patch > -0.1 && r < 0.28 && !viewCorridor && !blocksSightline(x, y, h)) {
       // trees: pines on the coast/cliff tops, oaks inland
       const coastal = h < 40 || y < 0;
       const sp = coastal ? (rng() < 0.6 ? 'pine' : 'oak') : rng() < 0.22 ? 'pine' : rng() < 0.06 ? 'cypress' : 'oak';
       if (nearSea && sp !== 'pine') continue;
       placeTree(sp, x, y, h, 0.75 + rng() * 0.55);
     } else if (r < 0.92) {
-      placeShrub(x, y, h, (0.7 + rng() * 1.0) * (slope > 0.45 ? 0.8 : 1.15));
+      placeShrub(x, y, h, (0.7 + rng() * 1.0) * (slope > 0.45 ? 0.8 : 1.15) * (viewCorridor ? 0.8 : 1));
     }
   }
 
@@ -421,7 +452,7 @@ export function buildVegetation(ctx) {
     placeShrub(COURT.cx + Math.cos(a) * r, COURT.cy + Math.sin(a) * r, 18.38, 0.55 + rng() * 0.3, groundCover, 'gc');
   }
   // court edge planting + boulders handled by rocks module; trees framing the court
-  for (const [x, y, s] of [[-7.5, 25, 1.05], [13.5, 24, 0.95], [-5, 31, 1.1], [12, 32, 0.9], [-10.5, 20.5, 0.85]]) placeTree('olive', x, y, field.height(x, y), s);
+  for (const [x, y, s] of [[-8.5, 25, 1.05], [14.5, 25, 0.95], [-8, 33, 1.1], [14, 34, 0.9], [-11.5, 20.5, 0.85]]) placeTree('olive', x, y, field.height(x, y), s);
   for (const [x, y] of [[-12.5, 16], [16.5, 17.5], [19.5, 14], [-15.5, 13.5]]) placeTree('cypress', x, y, field.height(x, y), 0.9);
   // around the court perimeter: low shrubs
   for (let i = 0; i < 70; i++) {
@@ -467,6 +498,11 @@ export function buildVegetation(ctx) {
       else placeShrub(x, y, LEVEL.roof + 0.22, (0.5 + rng() * 0.6) * (edge < 1.2 ? 1.1 : 0.9));
     }
     for (const [x, y, s] of [[-12.5, 2.5, 0.85], [6.5, 4.5, 0.95], [12.0, -3.5, 0.8], [-15.5, -3.2, 0.7], [1.5, -6.5, 0.7]]) placeTree('olive', x, y, LEVEL.roof + 0.22, s);
+    // lush band along the roof edge (spills over in the photos)
+    for (const p of resample([...offset(roof, -0.95), offset(roof, -0.95)[0]], 0.55)) {
+      if (p.y > 10) continue;
+      placeShrub(p.x, p.y, LEVEL.roof + 0.22, 0.8 + rng() * 0.6);
+    }
   }
   // L1 terrace edge planters (soil strip just inside the slab edge)
   {
@@ -480,7 +516,7 @@ export function buildVegetation(ctx) {
 
   // --- hanging vines from slab edges (clustered cascades) ---------------------
   const vineVariants = [];
-  for (let i = 0; i < 10; i++) vineVariants.push(vineStrand(mulberry32(900 + i), 0.8 + (i % 5) * 0.55));
+  for (let i = 0; i < 10; i++) vineVariants.push(vineStrand(mulberry32(900 + i), 0.8 + (i % 5) * 0.45));
   const vineShort = [];
   for (let i = 0; i < 6; i++) vineShort.push(vineStrand(mulberry32(950 + i), 0.35 + (i % 3) * 0.2));
   const vineAlong = (outline, z, inset, step, skip, set = vineVariants, keyPrefix = 'vine') => {
@@ -488,11 +524,11 @@ export function buildVegetation(ctx) {
     for (let i = 0; i < pts.length - 1; i++) {
       const p = pts[i], q = pts[i + 1];
       if (skip && skip(p)) continue;
-      const cluster = nz.fbm2(p.x / 4.5, p.y / 4.5, 2);
-      if (cluster < -0.05) continue;
+      const cluster = nz.fbm2(p.x / 5.5, p.y / 5.5, 2);
+      if (cluster < 0.12) continue;
       const t = new THREE.Vector2().subVectors(q, p).normalize();
       const out = new THREE.Vector2(t.y, -t.x);
-      const strands = 1 + Math.floor((cluster + 0.05) * 6 * rng());
+      const strands = 1 + Math.floor((cluster - 0.12) * 5 * rng());
       for (let k = 0; k < strands; k++) {
         const vi = Math.floor(rng() * set.length);
         const x = p.x + out.x * (inset + rng() * 0.12) + t.x * (rng() - 0.5) * step;
@@ -501,14 +537,14 @@ export function buildVegetation(ctx) {
         const m = new THREE.Matrix4().compose(
           new THREE.Vector3(x, z, -y),
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
-          new THREE.Vector3(1, 0.8 + rng() * 0.9, 1),
+          new THREE.Vector3(1, 0.8 + rng() * 0.5, 1),
         );
         push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(0.9 + rng() * 0.2, 1, 0.85 + rng() * 0.2));
       }
     }
   };
-  vineAlong(l1, LEVEL.upper + 0.15, 0.06, 0.55, (p) => p.y > 11.5);
-  vineAlong(roof, LEVEL.roof + 0.2, 0.06, 0.5, (p) => p.y > 10.5);
+  vineAlong(l1, LEVEL.upper + 0.15, 0.06, 0.55, (p) => p.y > 3.5);
+  vineAlong(roof, LEVEL.roof + 0.2, 0.06, 0.5, (p) => p.y > 3.5);
   // into the atrium (seen from the living room)
   vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.02, ATRIUM.ry - 0.02, 48, ATRIUM.rot)).reverse(), LEVEL.upper - 0.45, -0.05, 0.6, null, vineShort, 'vineS');
 
@@ -548,8 +584,26 @@ export function buildVegetation(ctx) {
   return { root, update() {} };
 }
 
+// planted-roof ground: mossy low groundcover with clumps and a few gravel paths
 function groundMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.10, 0.12, 0.06), roughness: 1 });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, envMapIntensity: 0.5 });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGW;')
+      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvGW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vGW;\nfloat gh(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}\nfloat gn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(gh(i),gh(i+vec2(1,0)),f.x),mix(gh(i+vec2(0,1)),gh(i+vec2(1,1)),f.x),f.y);}')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+{
+  vec2 p = vGW.xz;
+  float a = gn(p * 0.7) * 0.5 + gn(p * 2.3) * 0.3 + gn(p * 9.0) * 0.2;
+  vec3 g1 = vec3(0.045, 0.085, 0.025), g2 = vec3(0.11, 0.15, 0.05), g3 = vec3(0.16, 0.16, 0.09);
+  vec3 c = mix(g1, g2, smoothstep(0.3, 0.7, a));
+  c = mix(c, g3, smoothstep(0.75, 0.9, gn(p * 0.35 + 7.0)) * 0.6);
+  diffuseColor.rgb = c;
+}`);
+  };
+  m.customProgramCacheKey = () => 'roof-ground';
   return m;
 }
 
@@ -613,7 +667,7 @@ function buildIndoorPlants(root, quality) {
   const M = materials(quality);
   const leafMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.10, 0.22, 0.07), roughness: 0.55, side: THREE.DoubleSide, envMapIntensity: 0.5 });
   const stemMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.18, 0.24, 0.1), roughness: 0.7 });
-  const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-16.8, 3.6, 0.9], [4.0, 4.4, 0.85], [14.2, 4.6, 0.95], [-7.6, 3.9, 0.8]];
+  const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-16.8, 3.6, 0.9], [4.0, 4.4, 0.85], [16.9, 2.4, 0.95], [-7.6, 3.9, 0.8]];
   const leaves = [], stems = [], pots = [];
   const rng = mulberry32(31337);
   for (const [x, y, s] of spots) {

@@ -46,7 +46,7 @@ export const LEVEL = {
 // Azimuth measured clockwise from north (GLB +Y).
 export const SUN = {
   azimuthDeg: 146,
-  elevationDeg: 6.5,
+  elevationDeg: 9.0,
 };
 
 export function sunDirection(target = new THREE.Vector3()) {

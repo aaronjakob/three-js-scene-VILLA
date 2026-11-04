@@ -12,6 +12,7 @@ function rockGeometry(seed, detail = 4) {
   const g = new THREE.IcosahedronGeometry(1, detail);
   const s = new Simplex(seed);
   const pos = g.attributes.position;
+  const ao = new Float32Array(pos.count);
   const v = new THREE.Vector3();
   const flat = 0.55 + (seed % 5) * 0.08;
   const tilt = (seed % 7) * 0.3;
@@ -26,13 +27,21 @@ function rockGeometry(seed, detail = 4) {
     v.y *= flat;
     if (v.y < -0.35) v.y = -0.35 + (v.y + 0.35) * 0.4;
     pos.setXYZ(i, v.x, v.y, v.z);
+    ao[i] = d;
   }
   g.computeVertexNormals();
+  // cavity AO: vertices pushed in (low d) are darker
+  const col = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const c = Math.min(1, Math.max(0.35, 0.62 + (ao[i] - 1) * 1.4));
+    col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = c;
+  }
+  g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g;
 }
 
 export function rockMaterial() {
-  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.88, envMapIntensity: 0.5 });
+  const m = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, envMapIntensity: 0.45, vertexColors: true });
   m.onBeforeCompile = (sh) => {
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vRW;\nvarying vec3 vRN;')
@@ -52,8 +61,8 @@ vRN = normalize(mat3(modelMatrix) * objectNormal);
   float n1 = vh_fbm3(p * 0.35, 4);
   float n2 = vh_fbm3(p * 2.2, 3);
   float strata = 0.5 + 0.5 * sin(p.y * 3.3 + n1 * 5.0);
-  vec3 a = vec3(0.50, 0.48, 0.44);
-  vec3 b = vec3(0.30, 0.29, 0.27);
+  vec3 a = vec3(0.36, 0.345, 0.315);
+  vec3 b = vec3(0.17, 0.165, 0.15);
   vec3 c = mix(b, a, smoothstep(-0.3, 0.4, n1 + n2 * 0.4));
   c *= 0.86 + 0.14 * strata;
   // lichen / moss in crevices facing up
@@ -111,7 +120,7 @@ export function buildLandscapeDetail(ctx) {
     put(x, y, h - s * 0.25, s, big ? 0.9 + rng() * 0.8 : 0.7 + rng() * 0.4);
   }
   // 2) cliff outcrops on steep faces near the villa (0..140 m)
-  const N2 = Math.round(4200 * k);
+  const N2 = Math.round(2400 * k);
   for (let i = 0; i < N2; i++) {
     const x = (rng() * 2 - 1) * 140;
     const y = -8 - rng() * 50;
@@ -121,8 +130,8 @@ export function buildLandscapeDetail(ctx) {
     const slope = field.slope(x, y, 0.8);
     if (slope < 0.18) continue;
     if (nz.fbm2(x / 9, y / 9, 2) < -0.25 && slope < 0.5) continue;
-    const s = 0.8 + rng() * (slope > 0.45 ? 3.4 : 2.0);
-    put(x, y, h - s * 0.35, s, 0.6 + rng() * 0.5);
+    const s = 0.8 + rng() * (slope > 0.45 ? 3.0 : 1.6);
+    put(x, y, h - s * 0.5, s, 0.55 + rng() * 0.45);
   }
   // 3) garden boulders around the entry court and along the drive
   for (let i = 0; i < 70 * k; i++) {
@@ -159,7 +168,7 @@ export function buildLandscapeDetail(ctx) {
     root.add(im);
   }
   buildSettlements(root, field, rng, nz);
-  return { root };
+  return { root, material: mat };
 }
 
 // Distant city on the far side of the bay (south-east, ~6-7 km) and scattered
@@ -211,6 +220,7 @@ function buildSettlements(root, field, rng, nz) {
     const rr = 320 + Math.pow(rng(), 0.7) * 2800;
     const a = rng() * Math.PI * 2;
     const x = Math.cos(a) * rr + 300, y = Math.sin(a) * rr + 200;
+    if (Math.hypot(x, y) < 650) continue;
     const h0 = field.height(x, y);
     if (h0 < 6 || h0 > 260) continue;
     if (y - field.shoreY(x) > 1800) continue;

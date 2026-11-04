@@ -46,9 +46,9 @@ vec3 vh_skyBase(vec3 d) {
   vec3 sunTint = vec3(1.0, 0.88, 0.66);
   float horizonW = exp(-hp * 7.0);
   col += sunTint * (pow(muc, 7.0) * 0.30 * (0.30 + 0.70 * horizonW));
-  col += sunTint * pow(muc, 64.0) * 0.45;
-  col += vec3(1.0, 0.93, 0.80) * pow(muc, 900.0) * 1.6;
-  col += vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 30.0;
+  col += sunTint * pow(muc, 64.0) * 0.35;
+  col += vec3(1.0, 0.93, 0.80) * pow(muc, 900.0) * 1.0;
+  col += vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 14.0;
   // very subtle warm band hugging the horizon all around the sun side
   col = mix(col, vec3(0.95, 0.90, 0.80), exp(-hp * 45.0) * (0.15 + 0.35 * pow(mu * 0.5 + 0.5, 4.0)));
   // anti-solar side slightly cooler/pinker-free blue
@@ -94,8 +94,8 @@ vec3 vh_sky(vec3 d, bool withSun) {
   vec3 col = vh_skyBase(dir);
   if (!withSun) {
     float mu = dot(dir, uSunDir);
-    col -= vec3(1.0, 0.93, 0.80) * pow(max(mu, 0.0), 900.0) * 1.6;
-    col -= vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 30.0;
+    col -= vec3(1.0, 0.93, 0.80) * pow(max(mu, 0.0), 900.0) * 1.0;
+    col -= vec3(1.0, 0.95, 0.85) * smoothstep(0.99994, 0.99997, mu) * 14.0;
   }
   vec4 cl = vh_clouds(dir);
   col = mix(col, cl.rgb * (0.6 + 0.4 * vh_skyBase(normalize(dir + vec3(0.0, 0.4, 0.0))).b / 0.7), cl.a);
@@ -112,6 +112,20 @@ uniform vec3 uSunHazeColor;
 uniform float uHazeDensity;
 uniform float uHazeHeight;
 uniform vec3 uSunDirHaze;
+
+// 1 outside, falling to ~0.3 deep inside the main / upper floor envelopes
+float vh_interiorK(vec3 w) {
+  vec2 g = vec2(w.x, -w.z);
+  float k = 1.0;
+  if (w.y > 17.9 && w.y < 22.3) {
+    float e = length((g - vec2(0.0, 0.7)) / vec2(18.4, 10.0));
+    k = mix(0.3, 1.0, smoothstep(0.62, 1.0, e));
+  } else if (w.y >= 22.3 && w.y < 27.6) {
+    float e = length((g - vec2(-0.5, 1.6)) / vec2(16.5, 8.2));
+    k = mix(0.35, 1.0, smoothstep(0.6, 1.0, e));
+  }
+  return k;
+}
 
 vec3 vh_applyHaze(vec3 col, vec3 worldPos, vec3 camPos) {
   vec3 ray = worldPos - camPos;
@@ -181,6 +195,8 @@ export function createSkyDome({ withSun = true } = {}) {
 export function buildEnvironment(renderer) {
   const scene = new THREE.Scene();
   const dome = createSkyDome({ withSun: false });
+  // IBL from a cloud-free sky: glossy floors must not mirror cloud shapes
+  dome.material.uniforms = { ...dome.material.uniforms, uCloudCover: { value: 0.0 } };
   dome.scale.setScalar(100);
   dome.material.depthTest = false;
   scene.add(dome);
@@ -225,6 +241,24 @@ export function installHaze() {
 #ifdef USE_FOG
   varying vec3 vHazeWorldPos;
   ${GLSL_HAZE}
+#endif
+`;
+  // Interior light falloff: sky IBL is not occluded by walls in a forward
+  // renderer, so inside the glazed envelopes we attenuate it with distance
+  // from the glass and add a faint warm bounce from the 2700 K lights.
+  THREE.ShaderChunk.lights_fragment_maps = THREE.ShaderChunk.lights_fragment_maps + /* glsl */ `
+#ifdef USE_FOG
+{
+  float ik = vh_interiorK(vHazeWorldPos);
+  #if defined( RE_IndirectDiffuse )
+    iblIrradiance *= ik;
+    irradiance *= mix(1.0, ik, 0.7);
+    iblIrradiance += vec3(1.0, 0.78, 0.58) * (1.0 - ik) * 0.10;
+  #endif
+  #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+    radiance *= ik * ik;
+  #endif
+}
 #endif
 `;
   THREE.ShaderChunk.fog_fragment = /* glsl */ `

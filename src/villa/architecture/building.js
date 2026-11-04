@@ -44,36 +44,38 @@ export function buildVilla(ctx) {
 
   // ---------------- slabs -------------------------------------------------
   // main deck / floor slab (honed travertine), thick rounded edge
-  add(slabGeometry(deck, [], LEVEL.main, 0.62, { bevel: 0.2 }), M.deck, { name: 'deck-slab' });
+  const T1 = 0.85; // L1 slab: substantial, softly rounded edge (photos)
+  const TR = 0.8; // roof slab
+  add(slabGeometry(deck, [], LEVEL.main, 0.75, { bevel: 0.26, segments: 6 }), M.deck, { name: 'deck-slab' });
   // polished interior floor inlay (separate so it can be glossier)
   const floorIn = offset(enclosure, -0.04);
   const floorMesh = add(capGeometry(floorIn, [], LEVEL.main + 0.004, 1), M.floorPolished, { cast: false, name: 'floor-interior' });
 
   // upper floor slab with atrium + stair voids: thin elegant edge
-  add(slabGeometry(l1, [atrium, stairHole], LEVEL.upper, 0.55, { bevel: 0.24, segments: 6 }), M.slab, { name: 'l1-slab' });
+  add(slabGeometry(l1, [atrium, stairHole], LEVEL.upper, T1, { bevel: 0.36, segments: 8 }), M.slab, { name: 'l1-slab' });
   // interior ceiling (plaster) under L1, inside the enclosure
   const ceilIn = offset(enclosure, -0.02);
-  add(capGeometry(ceilIn, [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.02, ATRIUM.ry + 0.02, 72, ATRIUM.rot), stairHole], LEVEL.upper - 0.551, -1), M.ceiling, { cast: false, name: 'ceiling-l0' });
+  add(capGeometry(ceilIn, [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.02, ATRIUM.ry + 0.02, 72, ATRIUM.rot), stairHole], LEVEL.upper - T1 - 0.001, -1), M.ceiling, { cast: false, name: 'ceiling-l0' });
   // upper floor finish
   add(capGeometry(offset(upper, -0.04), [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.08, ATRIUM.ry + 0.08, 72, ATRIUM.rot), stairHole], LEVEL.upper + 0.004, 1), M.floorPlain, { cast: false, name: 'floor-upper' });
 
   // roof slab
-  add(slabGeometry(roof, [atriumRoof], LEVEL.roof, 0.5, { bevel: 0.22, segments: 6 }), M.slab, { name: 'roof-slab' });
-  add(capGeometry(offset(upper, -0.02), [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.07, ATRIUM.ry + 0.07, 72, ATRIUM.rot)], LEVEL.roof - 0.501, -1), M.ceiling, { cast: false, name: 'ceiling-l1' });
+  add(slabGeometry(roof, [atriumRoof], LEVEL.roof, TR, { bevel: 0.34, segments: 8 }), M.slab, { name: 'roof-slab' });
+  add(capGeometry(offset(upper, -0.02), [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.07, ATRIUM.ry + 0.07, 72, ATRIUM.rot)], LEVEL.roof - TR - 0.001, -1), M.ceiling, { cast: false, name: 'ceiling-l1' });
 
   // ---------------- LED coves on soffits ----------------------------------
   const coveL1 = offset(l1, -0.75);
   const coveL1Open = coveL1.filter((p) => !pointInPoly(p.x, p.y, offset(enclosure, 0.3)));
   const coveRoof = offset(roof, -0.6);
-  root.add(new THREE.Mesh(tubeAlong(coveL1, LEVEL.upper - 0.56, 0.022, { closed: true, tubular: 600, radial: 5 }), M.led));
-  root.add(new THREE.Mesh(tubeAlong(coveRoof, LEVEL.roof - 0.51, 0.02, { closed: true, tubular: 520, radial: 5 }), M.led));
+  root.add(new THREE.Mesh(tubeAlong(coveL1, LEVEL.upper - T1 - 0.01, 0.022, { closed: true, tubular: 600, radial: 5 }), M.led));
+  root.add(new THREE.Mesh(tubeAlong(coveRoof, LEVEL.roof - TR - 0.01, 0.02, { closed: true, tubular: 520, radial: 5 }), M.led));
   void coveL1Open;
 
   // ---------------- glazing ----------------------------------------------
   const glassRuns = [];
   const solidRuns = [];
   // classify enclosure samples: north solid except entry glazing
-  const isSolid = (p) => p.y > 8.4 && !(p.x > 0.6 && p.x < 5.4);
+  const isSolid = (p) => p.y > 8.4 && !(p.x > -2.2 && p.x < 9.0);
   let run = [enclosure[0]];
   let runSolid = isSolid(enclosure[0]);
   for (let i = 1; i <= enclosure.length; i++) {
@@ -89,7 +91,7 @@ export function buildVilla(ctx) {
   const glassGeos = [];
   const mullionGeos = [];
   const frameGeos = [];
-  const z0 = LEVEL.main, z1 = LEVEL.upper - 0.55;
+  const z0 = LEVEL.main, z1 = LEVEL.upper - T1;
   for (const r of glassRuns) {
     // cut out open sliders on the south facade
     const pieces = splitForOpenings(r, OPEN_SLIDERS, ENTRY_DOOR);
@@ -128,7 +130,14 @@ export function buildVilla(ctx) {
 
   // entry door: tall walnut pivot door + glass sidelight
   const doorY = ENTRY_DOOR.y;
-  add(box(ENTRY_DOOR.x1 - ENTRY_DOOR.x0, 0.12, 4.1, (ENTRY_DOOR.x0 + ENTRY_DOOR.x1) / 2 + 0.25, doorY + 0.05, z0, -0.35), M.walnut, { name: 'entry-door' });
+  // pivot door stands open ~20 degrees: tall walnut leaf with a bronze pull
+  add(box(ENTRY_DOOR.x1 - ENTRY_DOOR.x0, 0.12, 3.9, (ENTRY_DOOR.x0 + ENTRY_DOOR.x1) / 2 + 0.15, doorY + 0.25, z0, -0.35), M.walnut, { name: 'entry-door' });
+  // walnut-slat portal around the door
+  {
+    const slats = [];
+    for (let x = ENTRY_DOOR.x0 - 1.6; x < ENTRY_DOOR.x0 - 0.1; x += 0.11) slats.push(box(0.05, 0.08, z1 - z0 - 0.1, x, doorY + 0.08, z0));
+    add(merge(slats), M.walnut, { name: 'entry-slats' });
+  }
   add(box(0.04, 0.5, 0.04, ENTRY_DOOR.x0 + 0.5, doorY - 0.1, z0 + 1.05), M.brass);
 
   // upper floor glazing + curtains
@@ -143,7 +152,7 @@ export function buildVilla(ctx) {
       if (s !== s2 || i === upper.length) { (s2 ? upWall : upGlass).push(r2); r2 = [p]; s2 = s; }
     }
   }
-  const uz0 = LEVEL.upper, uz1 = LEVEL.roof - 0.5;
+  const uz0 = LEVEL.upper, uz1 = LEVEL.roof - TR;
   const upGlassGeo = [], upMull = [], curtainGeo = [];
   for (const r of upGlass) {
     upGlassGeo.push(stripGeometry(r, uz0 + 0.02, uz1 - 0.02));
@@ -156,7 +165,7 @@ export function buildVilla(ctx) {
     for (let i = 0; i < len; i++) {
       const t = i / len;
       // leave gaps (curtains drawn back) to reveal warm interiors
-      const open = Math.sin(t * 9.0 + 1.2) > 0.55;
+      const open = Math.sin(t * 9.0 + 1.2) > 0.2;
       if (open) { if (pts.length > 2) curtainGeo.push(foldedCurtain(pts, uz0 + 0.03, uz1 - 0.05)); pts.length = 0; continue; }
       pts.push(inner[i]);
     }
@@ -167,17 +176,34 @@ export function buildVilla(ctx) {
   add(merge(upMull), M.metalDark, { name: 'mullions-l1' });
   if (curtainGeo.length) add(merge(curtainGeo), M.curtain, { cast: false, name: 'curtains' });
   for (const r of upWall) add(wallGeometry(r, uz0, uz1, 0.4), M.travertineWall, { name: 'upper-north-wall' });
+  // upper floor: walnut-lined inner core seen through the curtain gaps, warm lights
+  {
+    const core = offset(upper, -4.2).filter((p) => p.y < 7.5);
+    const runs = [];
+    let cur = [];
+    for (const p of core) {
+      const inAtrium = Math.hypot((p.x - ATRIUM.cx) / (ATRIUM.rx + 1.2), (p.y - ATRIUM.cy) / (ATRIUM.ry + 1.2)) < 1;
+      if (inAtrium) { if (cur.length > 2) runs.push(cur); cur = []; } else cur.push(p);
+    }
+    if (cur.length > 2) runs.push(cur);
+    for (const r of runs) add(wallGeometry(r, uz0, uz1, 0.25), M.walnutDark, { name: 'upper-core' });
+    for (const [x, y] of [[-11, -1.5], [9, -1.0]]) {
+      const l = new THREE.PointLight(new THREE.Color(1.0, 0.72, 0.44), 14, 12, 2);
+      l.position.set(x, LEVEL.upper + 3.0, -y);
+      root.add(l);
+    }
+  }
 
   // atrium: glass drum at the upper level, curbs, LED rings, skylight
   const atriumIn = ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 72, ATRIUM.rot);
   add(stripGeometry(atriumIn, uz0, uz1, { closed: true }), M.glass, { cast: false, receive: false, name: 'atrium-drum' }).renderOrder = 2;
   add(merge(resample([...atriumIn, atriumIn[0]], 1.6).map((p) => box(0.05, 0.08, uz1 - uz0, p.x, p.y, uz0))), M.metalDark);
   // LED ring in the ceiling around the oculus (seen from the living room)
-  root.add(new THREE.Mesh(tubeAlong(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.25, ATRIUM.ry + 0.25, 96, ATRIUM.rot), LEVEL.upper - 0.57, 0.02, { closed: true, tubular: 200 }), M.led));
+  root.add(new THREE.Mesh(tubeAlong(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.25, ATRIUM.ry + 0.25, 96, ATRIUM.rot), LEVEL.upper - T1 - 0.02, 0.02, { closed: true, tubular: 200 }), M.led));
   // roof curb around the skylight (z ~ 28.9) + frameless glass
   const curbOuter = ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.45, ATRIUM.ry + 0.45, 96, ATRIUM.rot);
-  add(slabGeometry(curbOuter, [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.06, ATRIUM.ry + 0.06, 96, ATRIUM.rot)], 28.95, 0.7, { bevel: 0.12 }), M.slab, { name: 'skylight-curb' });
-  const skyGlass = add(capGeometry(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.1, ATRIUM.ry + 0.1, 96, ATRIUM.rot), [], 28.9, 1), M.glass, { cast: false, receive: false, name: 'skylight-glass' });
+  add(slabGeometry(curbOuter, [ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.06, ATRIUM.ry + 0.06, 96, ATRIUM.rot)], 28.9, 0.45, { bevel: 0.14 }), M.slab, { name: 'skylight-curb' });
+  const skyGlass = add(capGeometry(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.1, ATRIUM.ry + 0.1, 96, ATRIUM.rot), [], 28.86, 1), M.glass, { cast: false, receive: false, name: 'skylight-glass' });
   skyGlass.renderOrder = 2;
 
   // ---------------- interior partitions -----------------------------------
@@ -234,6 +260,8 @@ export function buildVilla(ctx) {
   const colPos = [[-9.5, -5.4], [2.7, -6.6], [10.2, -5.2], [-1.5, 2.6], [6.0, 2.0]];
   for (const [x, y] of colPos) {
     const g = new THREE.CylinderGeometry(0.27, 0.27, z1 - z0, 40, 1);
+    const uvc = g.attributes.uv;
+    for (let i = 0; i < uvc.count; i++) uvc.setXY(i, uvc.getX(i) * Math.PI * 0.54, uvc.getY(i) * (z1 - z0));
     g.translate(x, z0 + (z1 - z0) / 2, -y);
     colGeos.push(g);
   }
@@ -247,7 +275,7 @@ export function buildVilla(ctx) {
     const flush = () => {
       if (wallPts.length > 2) {
         const base = wallPts.map((p) => field.height(p.x, p.y) - 0.6);
-        geos.push(plinthStrip(wallPts.slice(), base, LEVEL.main - 0.6));
+        geos.push(plinthStrip(wallPts.slice(), base, LEVEL.main - 0.7));
       }
       wallPts.length = 0;
     };
@@ -259,7 +287,7 @@ export function buildVilla(ctx) {
       else flush();
     }
     flush();
-    if (geos.length) add(merge(geos), M.stoneWall, { name: 'plinth-walls' });
+    if (geos.length) add(merge(geos), ctx.rockMaterial ?? M.stoneWall, { name: 'plinth-walls' });
   }
 
   // ---------------- pool, waterfall, firepit, site -------------------------
@@ -375,21 +403,39 @@ function foldedCurtain(pts, z0, z1) {
 }
 
 // plinth: vertical strip from per-point base up to a fixed top
-function plinthStrip(pts, base, top) {
+function plinthStrip(pts0, base0, top) {
+  // rough limestone face: subdivided and pushed outward with layered noise
+  const pts = resample(pts0, 0.35);
+  const base = pts.map((p) => {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < pts0.length; i++) { const d = pts0[i].distanceToSquared(p); if (d < bd) { bd = d; bi = i; } }
+    return base0[bi];
+  });
   const n = pts.length;
-  const pos = new Float32Array(n * 6);
-  const uv = new Float32Array(n * 4);
+  const rows = 14;
+  const pos = new Float32Array(n * (rows + 1) * 3);
+  const uv = new Float32Array(n * (rows + 1) * 2);
   let dist = 0;
   for (let i = 0; i < n; i++) {
     if (i > 0) dist += pts[i].distanceTo(pts[i - 1]);
-    const p = pts[i];
-    pos.set([p.x, base[i], -p.y, p.x, top, -p.y], i * 6);
-    uv.set([dist, base[i], dist, top], i * 4);
+    const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+    const t = new THREE.Vector2().subVectors(b, a).normalize();
+    const out = new THREE.Vector2(t.y, -t.x);
+    for (let r = 0; r <= rows; r++) {
+      const k = r / rows;
+      const z = THREE.MathUtils.lerp(base[i], top, k);
+      const d = (Math.sin(dist * 1.7 + z * 2.3) * 0.18 + Math.sin(dist * 4.1 - z * 3.7) * 0.09 + Math.sin(dist * 0.6 + z * 0.9) * 0.3) * (1 - k * 0.7) + (1 - k) * 0.35;
+      const j = (i * (rows + 1) + r);
+      pos.set([pts[i].x + out.x * d, z, -(pts[i].y + out.y * d)], j * 3);
+      uv.set([dist, z], j * 2);
+    }
   }
   const idx = [];
   for (let i = 0; i < n - 1; i++) {
-    const a = i * 2;
-    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    for (let r = 0; r < rows; r++) {
+      const a = i * (rows + 1) + r, b = a + rows + 1;
+      idx.push(a, a + 1, b, a + 1, b + 1, b);
+    }
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));

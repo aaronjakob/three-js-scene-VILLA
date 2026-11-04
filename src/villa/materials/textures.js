@@ -27,15 +27,14 @@ function toTexture(canvas, { srgb = true, repeat = [1, 1], wrap = true } = {}) {
   return t;
 }
 
-// tileable fbm by sampling a torus in 4D -> approximate with 3D domain wrap
-function tileNoise(simplex, x, y, period, oct = 4) {
-  // periodic via blending four samples (cheap seamless trick)
-  const fx = x / period, fy = y / period;
-  const a = simplex.fbm2(x, y, oct);
-  const b = simplex.fbm2(x - period, y, oct);
-  const c = simplex.fbm2(x, y - period, oct);
-  const d = simplex.fbm2(x - period, y - period, oct);
-  return (a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy;
+// Seamless fbm over the unit square: bilinear blend of four shifted samples.
+// u, v in [0, 1); fx, fy = feature frequency per axis; ox, oy = sample offset.
+function tileNoise(simplex, u, v, fx, fy, oct = 4, ox = 0, oy = 0) {
+  const a = simplex.fbm2(u * fx + ox, v * fy + oy, oct);
+  const b = simplex.fbm2((u - 1) * fx + ox, v * fy + oy, oct);
+  const c = simplex.fbm2(u * fx + ox, (v - 1) * fy + oy, oct);
+  const d = simplex.fbm2((u - 1) * fx + ox, (v - 1) * fy + oy, oct);
+  return (a * (1 - u) + b * u) * (1 - v) + (c * (1 - u) + d * u) * v;
 }
 
 function pixelTexture(size, fn, opts = {}) {
@@ -67,16 +66,16 @@ export function travertine(kind = 'floor') {
   const rough = new Uint8ClampedArray(size * size);
   const { canvas, tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const band = tileNoise(s, u * 3, v * 22, 3, 4); // horizontal banding
-    const cloud = tileNoise(s, u * 5 + 40, v * 5 + 9, 5, 5);
+    const band = tileNoise(s, u, v, 3, 22, 4, 0, 0); // horizontal banding
+    const cloud = tileNoise(s, u, v, 5, 5, 5, 40, 9);
     const fine = s.noise2(x * 0.35, y * 1.4) * 0.5 + s.noise2(x * 1.1, y * 3.2) * 0.25;
     let l = 1 + band * 0.06 + cloud * 0.05 + fine * 0.025;
     // pores: short horizontal dark dashes
-    const pore = s.noise2(x * 0.08, y * 0.9);
-    const isPore = pore > 0.72 ? (pore - 0.72) * 2.4 : 0;
-    l -= isPore * 0.35;
+    const pore = s.noise2(x * 0.22, y * 1.6);
+    const isPore = pore > 0.8 ? (pore - 0.8) * 3.0 : 0;
+    l -= isPore * 0.16;
     const warm = band * 8;
-    rough[y * size + x] = clamp255(110 + isPore * 200 + cloud * 30);
+    rough[y * size + x] = clamp255(205 + isPore * 50 + cloud * 12);
     return [clamp255(base[0] * l + warm), clamp255(base[1] * l + warm * 0.6), clamp255(base[2] * l - warm * 0.3)];
   });
   // tile joints (large format 1.2 x 0.6 m when repeat is ~1 per 2.4 m)
@@ -117,8 +116,8 @@ export function slabStone() {
   const s = new Simplex(21);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const n = tileNoise(s, u * 4, v * 4, 4, 5) * 0.05 + tileNoise(s, u * 16, v * 16, 16, 3) * 0.025;
-    const streak = tileNoise(s, u * 2, v * 30, 2, 3) * 0.02;
+    const n = tileNoise(s, u, v, 4, 4, 5, 0, 0) * 0.05 + tileNoise(s, u, v, 16, 16, 3, 0, 0) * 0.025;
+    const streak = tileNoise(s, u, v, 2, 30, 3, 0, 0) * 0.02;
     const l = 1 + n + streak;
     return [clamp255(236 * l), clamp255(231 * l), clamp255(222 * l)];
   });
@@ -135,11 +134,11 @@ export function walnut(variant = 'panel') {
   const s = new Simplex(variant === 'panel' ? 31 : 32);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const warp = tileNoise(s, u * 3, v * 1.2, 3, 3) * 0.06;
-    const g = Math.sin((u + warp) * Math.PI * 2 * 38 + tileNoise(s, u * 6, v * 2, 6, 2) * 3);
+    const warp = tileNoise(s, u, v, 3, 1.2, 3, 0, 0) * 0.06;
+    const g = Math.sin((u + warp) * Math.PI * 2 * 38 + tileNoise(s, u, v, 6, 2, 2, 0, 0) * 3);
     const grain = Math.pow(Math.abs(g), 0.6);
     const fine = s.noise2(x * 1.6, y * 0.05) * 0.5 + 0.5;
-    const fig = tileNoise(s, u * 2 + 9, v * 2, 2, 4);
+    const fig = tileNoise(s, u, v, 2, 2, 4, 9, 0);
     let l = 0.78 + grain * 0.16 + fine * 0.1 + fig * 0.12;
     const r = 92 * l, gg = 60 * l, b = 40 * l;
     return [clamp255(r), clamp255(gg), clamp255(b)];
@@ -157,8 +156,8 @@ export function marble(kind = 'dark') {
   const s = new Simplex(kind === 'dark' ? 41 : 42);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const w1 = tileNoise(s, u * 3, v * 3, 3, 5);
-    const w2 = tileNoise(s, u * 7 + 3, v * 7, 7, 4);
+    const w1 = tileNoise(s, u, v, 3, 3, 5, 0, 0);
+    const w2 = tileNoise(s, u, v, 7, 7, 4, 3, 0);
     const vein = Math.abs(Math.sin((u * 2.0 + v * 1.3 + w1 * 1.8) * Math.PI * 3));
     const thin = Math.pow(1 - vein, 18);
     const vein2 = Math.pow(1 - Math.abs(Math.sin((u * 3.1 - v * 2.2 + w2 * 2.4) * Math.PI * 5)), 30);
@@ -341,9 +340,9 @@ export function bark() {
   const bump = new Uint8ClampedArray(size * size);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const fiss = Math.abs(tileNoise(s, u * 10, v * 2.5, 10, 4));
+    const fiss = Math.abs(tileNoise(s, u, v, 10, 2.5, 4, 0, 0));
     const ridge = 1 - Math.pow(fiss, 0.5);
-    const n = tileNoise(s, u * 30, v * 30, 30, 2);
+    const n = tileNoise(s, u, v, 30, 30, 2, 0, 0);
     bump[y * size + x] = clamp255((1 - ridge) * 230 + n * 30);
     const l = 0.55 + (1 - ridge) * 0.55 + n * 0.1;
     return [clamp255(98 * l), clamp255(88 * l), clamp255(76 * l)];

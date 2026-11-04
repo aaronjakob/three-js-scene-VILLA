@@ -40,7 +40,7 @@ export async function createVilla(container, options = {}) {
   let qName = options.quality ?? 'auto';
   if (qName === 'auto') qName = autoProfile(gpu, { mobile, lowMemory });
   if (!qName || !gpu) return createFallback(container, options);
-  const q = { ...PROFILES[qName] };
+  const q = { ...PROFILES[qName], ...(options.overrides ?? {}) };
 
   const reducedMotion =
     options.reducedMotion ?? window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
@@ -93,8 +93,8 @@ export async function createVilla(container, options = {}) {
   const sc = sun.shadow.camera;
   sc.left = -62; sc.right = 62; sc.top = 46; sc.bottom = -46;
   sc.near = 900; sc.far = 4200;
-  sun.shadow.bias = -0.0002;
-  sun.shadow.normalBias = 0.035;
+  sun.shadow.bias = 0;
+  sun.shadow.normalBias = 0.12; // grazing 9-degree sun: offset along normals, not depth
   sun.shadow.radius = 2.5;
   scene.add(sun, sun.target);
 
@@ -120,6 +120,7 @@ export async function createVilla(container, options = {}) {
   const lap = (k) => { if (options.profile) console.log(`[villa] ${k} ${(performance.now() - T0).toFixed(0)} ms`); };
   lap('terrain+ocean');
   const detail = buildLandscapeDetail(ctx);
+  ctx.rockMaterial = detail.material;
   lap('rocks');
   const villa = buildVilla(ctx);
   lap('villa');

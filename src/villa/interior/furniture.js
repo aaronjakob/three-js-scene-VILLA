@@ -334,7 +334,8 @@ export function buildInterior(ctx) {
     B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 2.4, 8.9, Z));
     B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 3.6, 8.9, Z));
     B.push(M.ceramicDark, place(new THREE.LatheGeometry([V2(0, 0), V2(0.12, 0), V2(0.18, 0.2), V2(0.1, 0.5), V2(0.06, 0.56), V2(0, 0.56)], 32), 2.6, 8.9, Z + 0.86));
-    lights.push([3.0, 8.4, Z + 3.4, 4, 8]);
+    lights.push([3.0, 8.4, Z + 3.4, 6, 10]);
+    lights.push([6.5, 8.8, Z + 3.2, 4, 8]);
   }
 
   B.flush(root);

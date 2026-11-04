@@ -23,6 +23,8 @@ const opts = {
   animate: !still,
   debug: params.has('debug'),
   profile: params.has('profile'),
+  // dev: ?ov=ao:0,msaa:0 overrides individual quality settings
+  overrides: params.get('ov') ? Object.fromEntries(params.get('ov').split(',').map((kv) => { const [k, v] = kv.split(':'); return [k, isNaN(+v) ? v : +v]; })) : undefined,
   camera: params.get('cam') ? params.get('cam').split(',').map(Number) : undefined,
   preserveDrawingBuffer: still,
   onViewChange: (id) => {

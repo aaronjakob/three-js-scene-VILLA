@@ -203,7 +203,7 @@ export function createOcean({ heightNear, heightFar, waveTexture }) {
     uNearBounds: { value: heightNear.userData.bounds },
     tHeightFar: { value: heightFar },
     uFarBounds: { value: heightFar.userData.bounds },
-    uSunColor: { value: new THREE.Color(1.0, 0.88, 0.66).multiplyScalar(14) },
+    uSunColor: { value: new THREE.Color(1.0, 0.88, 0.66).multiplyScalar(8) },
     tWave: { value: waveTexture },
   };
   const mat = new THREE.ShaderMaterial({
