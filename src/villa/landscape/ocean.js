@@ -128,12 +128,12 @@ void main() {
 // Tileable wave-slope texture generated on the GPU once (sum of periodic
 // directional waves with a wind-shaped spectrum). No downloaded normal maps.
 const genFrag = /* glsl */ `
-uniform vec4 uWaves[160];
+uniform vec4 uWaves[256];
 varying vec2 vUv;
 void main() {
   vec2 p = vUv * 6.28318530718;
   vec2 s = vec2(0.0);
-  for (int i = 0; i < 160; i++) {
+  for (int i = 0; i < 256; i++) {
     vec4 w = uWaves[i];
     float ph = dot(w.xy, p) + w.w;
     s += w.xy * w.z * cos(ph);
@@ -154,9 +154,9 @@ export function generateWaveTexture(renderer, size = 512, seed = 3) {
   const waves = [];
   const wind = 0.35;
   let sumSq = 0;
-  while (waves.length < 160) {
-    const kx = Math.round((rnd() * 2 - 1) * 22);
-    const ky = Math.round((rnd() * 2 - 1) * 22);
+  while (waves.length < 256) {
+    const kx = Math.round((rnd() * 2 - 1) * 40);
+    const ky = Math.round((rnd() * 2 - 1) * 40);
     const k = Math.hypot(kx, ky);
     if (k < 2) continue;
     const ang = Math.atan2(ky, kx);

@@ -564,7 +564,7 @@ export function buildVegetation(ctx) {
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
           new THREE.Vector3(1, 0.8 + rng() * 0.5, 1),
         );
-        push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(0.9 + rng() * 0.2, 1, 0.85 + rng() * 0.2));
+        push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(1.15 + rng() * 0.25, 1.3, 1.0 + rng() * 0.2));
       }
     }
   };
@@ -696,7 +696,7 @@ function buildIndoorPlants(root, quality) {
   const M = materials(quality);
   const leafMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.10, 0.22, 0.07), roughness: 0.55, side: THREE.DoubleSide, envMapIntensity: 0.5 });
   const stemMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.18, 0.24, 0.1), roughness: 0.7 });
-  const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-16.8, 3.6, 0.9], [4.0, 4.4, 0.85], [16.9, 2.4, 0.95], [-7.6, 3.9, 0.8]];
+  const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-15.9, 0.0, 0.9], [4.0, 4.4, 0.85], [16.9, 2.4, 0.95], [-7.6, 3.9, 0.8]];
   const leaves = [], stems = [], pots = [];
   const rng = mulberry32(31337);
   for (const [x, y, s] of spots) {

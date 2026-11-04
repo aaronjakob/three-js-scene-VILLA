@@ -38,6 +38,7 @@ export function materials(quality) {
       roughnessMap: rep(trav.roughnessMap, 1 / 2.4),
       roughness: 0.44,
       metalness: 0,
+      specularIntensity: 0.55,
       clearcoat: 0.05,
       clearcoatRoughness: 0.3,
       envMapIntensity: 0.45,

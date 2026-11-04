@@ -11,10 +11,10 @@ a default profile.
 
 | Measure (profile `still`) | Value |
 |---|---|
-| Build time (terrain, textures, villa, vegetation) | ~12 s on 4 CPU cores |
-| Scene size | ~11.5 M triangles, ~49 k instances, ~200 geometries |
-| One 400×225 frame (SwiftShader) | ~60 s wall clock |
-| One 640×360 frame (SwiftShader) | see `renders/stats.json` |
+| Build time (terrain, textures, villa, vegetation) | ~12 s on 4 CPU cores (yields to the host between stages) |
+| Scene size (round 3) | ~14.1 M triangles, ~55 k instances, ~230 geometries, ~75 programs |
+| One 640×360 still, incl. page load + build (SwiftShader) | 74–175 s (interiors fastest, sea-facing aerials slowest) |
+| One 1920×1080 still (SwiftShader) | see `renders/stats.json` |
 
 On a discrete GPU this triangle count is routine; the main per-frame costs are
 the planar reflection pass (second scene render at 0.5–0.6× resolution),

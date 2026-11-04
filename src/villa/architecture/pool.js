@@ -268,7 +268,7 @@ export function buildPool(ctx, root, M, plan) {
     let L = 0;
     for (let i = 0; i < uvA.count; i++) L = Math.max(L, uvA.getX(i));
     for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) / L, 1 - uvA.getY(i) / (WATER_Z - 17.25));
-    const m = add(g, sheetMaterial({ speed: 0.9, density: 20, opacity: 0.55 }), { cast: false, receive: false, name: 'infinity-film' });
+    const m = add(g, sheetMaterial({ speed: 0.9, density: 20, opacity: 0.32, tint: [0.42, 0.56, 0.6] }), { cast: false, receive: false, name: 'infinity-film' });
     m.renderOrder = 4;
     // catch trough lip
     add(sweepRect(offsetOpenOut(outS, 0.2), 17.1, 0.36, 0.15), M.slab, { name: 'catch-trough' });

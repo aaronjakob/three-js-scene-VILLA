@@ -58,6 +58,7 @@ export class ReflectionPlane {
   vec2 ruv = vReflCoord.xy / vReflCoord.w;
   float lod = uReflRough * 6.0;
   vec4 rc = textureLod(tReflection, ruv, lod);
+  rc.rgb = min(rc.rgb, vec3(2.2)); // no blown sun disc in the floor
   vec3 wN = inverseTransformDirection(normal, viewMatrix);
   float k = uReflStrength * mix(0.25, 1.0, F) * rc.a * smoothstep(0.9, 0.99, wN.y);
   outgoingLight = mix(outgoingLight, outgoingLight * 0.55 + rc.rgb, k * 0.85);
