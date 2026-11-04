@@ -44,9 +44,14 @@ export function disableVillaBackdrop() {
 - **Backdrop mode** renders a frame only when something changes (view, resize).
   With `prefers-reduced-motion` the water never animates and view changes cut
   instead of fly.
-- **Explore mode** (`villa.setMode('explore')`): drag to look, WASD / arrows to
-  walk at eye height, Shift to walk faster, Esc to leave. Walls, glass, the pool
-  and cliff edges are colliders.
+- **Explore mode** (`villa.setMode('explore')`): the canvas takes focus
+  (`role="application"`); drag to look, W/S or ↑/↓ to walk, A/D to step sideways,
+  ←/→ or Q/E to turn, Shift to walk faster, Esc to leave. Keys are read only from
+  the focused canvas, never with Ctrl/Cmd/Alt, never during IME composition, and
+  input is cleared when the window loses focus. Walking starts on the nearest
+  terrace when entered from an aerial or sea view. Walls, glass, the pool and
+  cliff edges are colliders. `options.onModeChange(mode)` reports changes;
+  `setView()` always returns to backdrop mode.
 - Call `villa.pause()` when the OS shows a heavy view over the backdrop and
   `villa.resume()` when it is visible again.
 
@@ -54,8 +59,16 @@ export function disableVillaBackdrop() {
 
 - Put the container behind the OS layers (`position: fixed; inset: 0; z-index: 0`)
   and keep every OS panel above it. The villa never adds UI of its own.
-- The canvas is focusable (`tabindex=0`) only so keyboard walking works in
-  explore mode; the OS keeps normal focus order otherwise.
+- As a backdrop the canvas is `tabindex=-1` and `aria-hidden`, so it adds no
+  tab stop and nothing for screen readers; it becomes focusable only in explore
+  mode.
+- Startup yields to the host between build stages and compiles shaders
+  asynchronously; if anything fails, the module removes its canvas and shows the
+  still instead.
+- `dispose()` releases every GPU resource (including the shadow map and the GL
+  context) and restores the three.js shader chunks it patched, so other three.js
+  scenes in the host are unaffected.
+- GPU context loss (sleep, driver reset) is recovered automatically.
 
 ## 4. Views
 

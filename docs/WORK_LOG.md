@@ -47,3 +47,42 @@ Found and fixed while the round was rendering:
   threshold 2.4.
 - Dining camera stood inside the kitchen wall → moved; roof camera pulled back to
   show the roof sweep and the pool beyond.
+
+### Round 2 — full set at 640×360, first blind reviews
+Three independent visual reviewers (architecture/materials, layout consistency,
+light/colour/nature) saw only the photo references, the plan and the renders.
+
+| Reviewer emphasis | Realism | Light & colour | Architecture | Layout | Vegetation & water | Overall |
+|---|---|---|---|---|---|---|
+| Architecture & materials | 3.5 | 4.0 | 3.5 | 6.0 | 4.0 | **4.2** |
+| Layout consistency | 3.5 | 3.0 | 4.5 | 6.5 | 3.0 | **4.1** |
+| Light, colour, nature | 3.5 | 3.5 | 4.0 | 6.0 | 3.5 | **4.1** |
+
+A code reviewer scored OS-integration readiness **4/10** (global key capture,
+no blur handling, incomplete dispose, no context-loss recovery, walk mode spawning
+underwater from sea views, GPU regexes, accessibility).
+
+All agreed programme placement was correct and stable in every view (no mirroring,
+swapping or duplicates). Fixes made for round 3:
+- Pool rebuilt as a crescent spanning the south facade (x −14.4…14.4, centroid
+  (0, −12.4)); deck edge now derived from the pool curve; waterfall spills from
+  the south‑west lip nearest the manifest anchor, wider, three layers, mist, larger
+  plunge pool.
+- Clipping: nothing grows inside the pool or under slabs; firepit terrace seated
+  into the rock.
+- Atrium: one open oval shaft from the living‑room ceiling to the sky, stone‑lined
+  and planted; no glass lid or upper‑floor drum.
+- Slabs: thin plates over a recessed soffit body (knife edge), LED coves in the
+  recess; upper floor clear‑glazed with furnished suites; drapes removed.
+- North facade: limestone cladding, walnut brise‑soleil, warm canopy downlights.
+- Interior: centre‑anchored furniture boxes were sinking half into the floor
+  (desk pedestal, island panels, kitchen units) → fixed; three columns removed;
+  27" monitors on short arms; tub dining chairs; 2700 K LEDs at lower intensity
+  (no white clipping); warmer ceiling with a cove; floor glare reduced; workspace
+  and dining cameras reframed to include the walnut wall and kitchen.
+- Light/grade: sun lowered to 5.5° with a pale‑yellow disc, +⅔ stop exposure,
+  warm gain, less blue in the shadows; brighter olive foliage; mip‑alpha
+  compensation so distant trees keep their crowns; low‑detail tree ring to 650 m
+  replaces the dome‑shaped canopy masses near the ridge; sea layers modulated to
+  hide tiling; darker limestone cliff under the villa.
+- Integration: all code‑review BUG items fixed (see commit "Harden embedding").
