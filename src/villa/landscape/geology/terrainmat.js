@@ -129,9 +129,13 @@ float vt_rough;`)
     rockMask = max(rockMask, outc * 0.9);
     vt_h += (hs + tuft * 0.015 * (1.0 - smoothstep(10.0, 40.0, dist))) * nearV * flatK;
   }
-  GrSurf rs = gr_limestone(wp, wn, wp.y + n1 * 1.2, 0.6, 1.0 - 0.25 * smoothstep(0.1, 0.5, n2), 0.0, 0.0, 0.5 + 0.5 * n2, dist, uTime);
-  // dark weathering on the big sunlit coastal faces
-  rs.col *= mix(1.0, 0.72 + 0.28 * smoothstep(-0.3, 0.4, n1), smoothstep(0.35, 0.75, slope));
+  GrSurf rs;
+  rs.col = vec3(0.2); rs.h = 0.0; rs.rough = 0.9; rs.wet = 0.0;
+  if (rockMask > 0.002) {
+    rs = gr_limestone(wp, wn, wp.y + n1 * 1.2, 0.6, 1.0 - 0.25 * smoothstep(0.1, 0.5, n2), 0.0, 0.0, 0.5 + 0.5 * n2, dist, uTime);
+    // dark weathering on the big sunlit coastal faces
+    rs.col *= mix(1.0, 0.72 + 0.28 * smoothstep(-0.3, 0.4, n1), smoothstep(0.35, 0.75, slope));
+  }
   vec3 col = mix(veg, rs.col, rockMask);
   // vegetation clinging to ledges on coastal cliffs
   float ledgeVeg = smoothstep(0.1, 0.5, n2 + 0.2) * (1.0 - smoothstep(0.35, 0.7, slope)) * (1.0 - shore);
