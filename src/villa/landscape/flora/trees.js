@@ -216,7 +216,7 @@ export function bakeAO(cards, cell = 0.5, sigma = 1.1) {
       }
       acc += Math.exp(-sigma * sum * step);
     }
-    c.ao = Math.min(1, 0.18 + 0.95 * (acc / AO_DIRS.length));
+    c.ao = Math.min(1, 0.32 + 0.8 * (acc / AO_DIRS.length));
   }
 }
 
@@ -438,7 +438,7 @@ function foliageCards(sp, sk, rng, H) {
     const al = sp === 'aleppo';
     for (const tw of sk.twigs) {
       const e = at(tw, 1);
-      const s = (al ? 0.75 : 0.95) * (0.8 + rng() * 0.4);
+      const s = (al ? 0.9 : 1.1) * (0.8 + rng() * 0.4);
       // star tuft facing up + two crossing brushes along the twig
       add({ p: e.p.clone().add(V(0, 0.05, 0)), axis: anyPerp(UP).applyAxisAngle(UP, rng() * TAU), face: V((rng() - 0.5) * 0.5, 1, (rng() - 0.5) * 0.5).normalize(), w: s * 1.1, h: s * 1.1, cell: al ? 'aleppo' : 'pineTop', clump: tw.clump, roll: 0, bend: 0 });
       const st = at(tw, 0.45);
@@ -466,19 +466,20 @@ function foliageCards(sp, sk, rng, H) {
   } else {
     const isOak = sp === 'oak';
     for (const tw of sk.twigs) {
-      const n = isOak ? 5 : 4;
+      const n = isOak ? 6 : 6;
       for (let k = 0; k < n; k++) {
-        const s = at(tw, 0.2 + (k / n) * 0.8);
+        const s = at(tw, 0.1 + (k / n) * 0.9);
         const outw = s.p.clone().sub(sk.crownC).normalize();
         const axis = s.d.clone().lerp(outw, 0.35).add(V(0, isOak ? 0.15 : -0.1, 0)).normalize();
-        add({ p: s.p, axis, face: outw.clone().lerp(UP, 0.4).normalize(), w: (isOak ? 0.62 : 0.56) * (0.8 + rng() * 0.4), h: (isOak ? 0.64 : 0.6) * (0.8 + rng() * 0.4), cell: isOak ? (rng() < 0.5 ? 'oakA' : 'oakB') : (rng() < 0.5 ? 'oliveA' : 'oliveB'), clump: tw.clump, roll: (rng() - 0.5) * 2.2, bend: (rng() - 0.5) * 1.6 });
+        add({ p: s.p, axis, face: outw.clone().lerp(UP, 0.4).normalize(), w: (isOak ? 0.82 : 0.78) * (0.8 + rng() * 0.4), h: (isOak ? 0.84 : 0.8) * (0.8 + rng() * 0.4), cell: isOak ? (rng() < 0.5 ? 'oakA' : 'oakB') : (rng() < 0.5 ? 'oliveA' : 'oliveB'), clump: tw.clump, roll: (rng() - 0.5) * 2.2, bend: (rng() - 0.5) * 1.6 });
       }
     }
   }
   return cards;
 }
 
-const RADIAL = [[12, 8, 5, 3], [7, 5, 3, 0], [5, 3, 0, 0]];
+// radial segments per LOD and branch level (twigs live in the spray texture)
+const RADIAL = [[12, 8, 5, 0], [7, 5, 3, 0], [5, 3, 0, 0]];
 
 export function makeTreeVariant(sp, seed) {
   const rng = mulberry32(seed * 7919 + sp.length * 131 + 17);
@@ -486,7 +487,7 @@ export function makeTreeVariant(sp, seed) {
   const H = S.height[0] + (S.height[1] - S.height[0]) * rng();
   const sk = sp === 'pine' ? stonePine(rng, H, false) : sp === 'aleppo' ? stonePine(rng, H, true) : sp === 'oak' ? holmOak(rng, H) : sp === 'olive' ? olive(rng, H) : cypress(rng, H);
   const cards = foliageCards(sp, sk, rng, H);
-  bakeAO(cards, 0.5, sp === 'cypress' ? 1.6 : 1.1);
+  bakeAO(cards, 0.5, sp === 'cypress' ? 1.1 : 0.75);
   const lods = [];
   for (let L = 0; L < 3; L++) {
     const w = woodBuf();

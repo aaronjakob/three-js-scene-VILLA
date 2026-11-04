@@ -63,23 +63,23 @@ export function cellRect(name, inset = 1.5) {
 }
 
 // --- palette (sRGB 0..255) ---------------------------------------------------
-const OLIVE_TOP = [74, 86, 56];
-const OLIVE_TOP2 = [96, 104, 66];
-const OLIVE_UNDER = [150, 158, 136];
-const OLIVE_UNDER2 = [168, 172, 150];
+const OLIVE_TOP = [86, 100, 64];
+const OLIVE_TOP2 = [110, 118, 74];
+const OLIVE_UNDER = [158, 166, 142];
+const OLIVE_UNDER2 = [176, 180, 156];
 const OLIVE_BARK = [92, 84, 70];
-const OAK_TOP = [42, 58, 30];
-const OAK_TOP2 = [58, 74, 36];
-const OAK_NEW = [104, 122, 58];
-const OAK_UNDER = [122, 126, 102];
+const OAK_TOP = [52, 72, 36];
+const OAK_TOP2 = [70, 90, 42];
+const OAK_NEW = [112, 132, 62];
+const OAK_UNDER = [128, 132, 106];
 const OAK_BARK = [70, 60, 50];
-const PINE_N = [58, 78, 40];
-const PINE_N2 = [96, 112, 56];
+const PINE_N = [70, 94, 46];
+const PINE_N2 = [110, 126, 62];
 const PINE_TWIG = [120, 86, 58];
-const ALEPPO_N = [84, 104, 54];
-const ALEPPO_N2 = [120, 130, 70];
-const CYP = [38, 56, 32];
-const CYP2 = [66, 86, 44];
+const ALEPPO_N = [92, 114, 58];
+const ALEPPO_N2 = [128, 138, 74];
+const CYP = [46, 68, 38];
+const CYP2 = [76, 98, 50];
 
 const TAU = Math.PI * 2;
 
