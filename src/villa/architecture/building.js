@@ -210,6 +210,10 @@ export function buildVilla(ctx) {
       dl.push(d);
     }
     root.add(new THREE.Mesh(merge(dl), M.led));
+    const up = new THREE.SpotLight(new THREE.Color(1.0, 0.7, 0.45), 30, 12, 0.6, 0.6, 2);
+    up.position.set(COURT.cx + 1.6, 18.4, -(COURT.cy - 1.6));
+    up.target.position.set(COURT.cx, 22.5, -COURT.cy);
+    root.add(up, up.target);
     for (const [x, y] of [[3.0, 13.4], [-1.0, 12.0], [7.0, 12.0]]) {
       const l = new THREE.PointLight(new THREE.Color(1.0, 0.68, 0.4), 9, 9, 2);
       l.position.set(x, LEVEL.upper - T1 - 0.2, -y);
@@ -238,7 +242,9 @@ export function buildVilla(ctx) {
   // atrium shaft: one continuous oval from the living-room ceiling to the sky,
   // lined in stone and planted (vertical garden added by the vegetation module)
   const shaft = ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.03, ATRIUM.ry + 0.03, 128, ATRIUM.rot);
-  const shaftMesh = add(stripGeometry(shaft, LEVEL.upper - T1, LEVEL.roof, { closed: true }), M.stoneWall, { name: 'atrium-shaft' });
+  const shaftMat = M.ceiling.clone();
+  shaftMat.side = THREE.DoubleSide;
+  const shaftMesh = add(stripGeometry(shaft, LEVEL.upper - T1, LEVEL.roof, { closed: true }), shaftMat, { name: 'atrium-shaft' });
   void shaftMesh;
   // LED ring in the ceiling around the oculus (seen from the living room)
   root.add(new THREE.Mesh(tubeAlong(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.25, ATRIUM.ry + 0.25, 96, ATRIUM.rot), LEVEL.upper - T1 - 0.02, 0.02, { closed: true, tubular: 200 }), M.led));
@@ -298,7 +304,7 @@ export function buildVilla(ctx) {
 
   // columns: travertine, slender (structure for the long spans)
   const colGeos = [];
-  const colPos = [[-9.5, -5.4], [11.4, -4.6]];
+  const colPos = [[-12.6, -4.4], [11.4, -4.6]];
   for (const [x, y] of colPos) {
     const g = new THREE.CylinderGeometry(0.22, 0.22, z1 - z0, 48, 1);
     const uvc = g.attributes.uv;
@@ -379,7 +385,7 @@ export function buildVilla(ctx) {
     colliders,
     walkHeight,
     reflectiveMaterials: [
-      { material: M.floorPolished, strength: 0.26, roughness: 0.42 },
+      { material: M.floorPolished, strength: 0.45, roughness: 0.3 },
       { material: M.deck, strength: 0.1, roughness: 0.6 },
     ],
     poolWater: poolParts.water,

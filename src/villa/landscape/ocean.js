@@ -85,12 +85,12 @@ void main() {
   R = normalize(R);
   float cosT = clamp(dot(-vd, N), 0.0, 1.0);
   float F = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
-  vec3 refl = vh_sky(R, false) * 0.9;
+  vec3 refl = vh_sky(R, false) * 0.78;
   // reflected rays that dip below the horizon see the next wave, not the sky
   refl = mix(refl, vh_sky(normalize(vec3(R.x, 0.05, R.z)), false) * 0.55, downR);
 
   // sun glitter: sharp near, broad far
-  float rough = mix(0.0016, 0.012, smoothstep(30.0, 6000.0, dist));
+  float rough = mix(0.0012, 0.0065, smoothstep(30.0, 6000.0, dist));
   float mu = max(dot(R, uSunDir), 0.0);
   float spec = pow(mu, 1.0 / rough) * (1.0 / rough) * 0.0045;
   vec3 sunCol = uSunColor;
@@ -99,8 +99,8 @@ void main() {
   float th = terrainH(g);
   float depth = max(-th, 0.0);
   float shallow = 1.0 - smoothstep(0.5, 9.0, depth);
-  vec3 deep = vec3(0.006, 0.030, 0.075);
-  vec3 mid = vec3(0.012, 0.060, 0.115);
+  vec3 deep = vec3(0.004, 0.028, 0.085);
+  vec3 mid = vec3(0.010, 0.060, 0.140);
   vec3 lagoon = vec3(0.030, 0.150, 0.160);
   vec3 body = mix(deep, mid, pow(1.0 - abs(vd.y), 2.0) * 0.5);
   body = mix(body, lagoon, shallow * shallow * 0.75);

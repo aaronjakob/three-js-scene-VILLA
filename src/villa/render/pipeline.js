@@ -237,7 +237,7 @@ export class Pipeline {
     P?.('bloom');
     const u = this.finalMat.uniforms;
     const g = this.grade;
-    u.uExposure.value = g.exposure;
+    u.uExposure.value = g.exposure * Math.pow(2, this.evOffset ?? 0);
     u.uSaturation.value = g.saturation;
     u.uContrast.value = g.contrast;
     u.uLift.value.copy(g.lift);

@@ -68,7 +68,9 @@ export function buildSite(ctx, root, M) {
       for (let i = 0; i < ia.length; i += 3) { const tmp = ia[i + 1]; ia[i + 1] = ia[i + 2]; ia[i + 2] = tmp; }
       g.computeVertexNormals();
     }
-    add(g, M.cobbles, { cast: false, name: 'driveway' });
+    const driveMat = M.cobbles.clone();
+    driveMat.color = new THREE.Color(0.55, 0.53, 0.5);
+    add(g, driveMat, { cast: false, name: 'driveway' });
   }
 
   // --- terrace furniture -----------------------------------------------------

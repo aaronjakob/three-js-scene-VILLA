@@ -22,15 +22,17 @@ const EYE = 18 + 1.62;
 export const VIEWS = [
   {
     id: 'aerial',
+    ev: 0.15,
     key: '1',
     label: 'Seaward aerial',
-    manifest: '01_Exterior_Aerial_Master',
-    position: [40, -58, 46],
-    target: [-1, -6, 19],
-    fov: 38,
+    manifest: '01_Exterior_Aerial_Master (reframed: NW vantage so sea + SE skyline are in frame)',
+    position: [-68, 22, 72],
+    target: [6, -30, 6],
+    fov: 40,
   },
   {
     id: 'seaward',
+    ev: 0.2,
     key: '2',
     label: 'Seaward facade',
     manifest: '02_Exterior_Seaward_Facade',
@@ -40,15 +42,17 @@ export const VIEWS = [
   },
   {
     id: 'entry',
+    ev: 0.6,
     key: '3',
     label: 'North entry',
     manifest: '03_Exterior_Land_Entrance',
-    position: [5.5, 40, 22.4],
-    target: [2.6, 9, 21.2],
+    position: [12, 40, 22.4],
+    target: [2.2, 10, 20.8],
     fov: 46,
   },
   {
     id: 'west',
+    ev: 0.5,
     key: '4',
     label: 'West waterfall',
     manifest: '04_Exterior_West_Waterfall',
@@ -58,6 +62,7 @@ export const VIEWS = [
   },
   {
     id: 'east',
+    ev: 0.25,
     key: '5',
     label: 'East firepit',
     manifest: '05_Exterior_East_Firepit',
@@ -97,6 +102,7 @@ export const VIEWS = [
   },
   {
     id: 'roof',
+    ev: -0.25,
     key: '9',
     label: 'Roof opening',
     manifest: '09_Roof_Skylight_Closeup (NW vantage per brief 09)',
@@ -106,6 +112,7 @@ export const VIEWS = [
   },
   {
     id: 'hero-interior',
+    ev: -0.1,
     key: '0',
     label: 'Living to sea',
     manifest: 'extra hero',
@@ -116,6 +123,7 @@ export const VIEWS = [
   },
   {
     id: 'hero-exterior',
+    ev: -0.25,
     key: '-',
     label: 'Terrace to sea',
     manifest: 'extra hero',

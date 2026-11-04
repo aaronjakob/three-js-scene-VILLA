@@ -54,9 +54,9 @@ void main() {
     refl = mix(refl, rc.rgb, rc.a);
   }
   float sun = pow(max(dot(R, uSunDir), 0.0), 900.0) * 30.0;
-  vec3 body = vec3(0.10, 0.42, 0.44);
-  float alpha = mix(0.22, 1.0, F);
-  vec3 col = body * (1.0 - F) * 0.35 + refl * F + vec3(1.0, 0.9, 0.7) * sun;
+  vec3 body = vec3(0.04, 0.36, 0.42);
+  float alpha = mix(0.38, 1.0, F);
+  vec3 col = body * (1.0 - F) * 0.55 + refl * F + vec3(1.0, 0.9, 0.7) * sun;
   col = vh_applyHaze(col, P, cameraPosition);
   gl_FragColor = vec4(col / max(alpha, 0.001), alpha);
   gl_FragColor.rgb *= 1.0;
@@ -325,11 +325,11 @@ export function buildPool(ctx, root, M, plan) {
     // basin at the foot (z ~ 8.7) with foam ring
     const bx = start.x + dir.x * v0 * T, by = start.y + dir.y * v0 * T;
     const basin = ellipse(bx + dir.x * 0.6, by + dir.y * 0.6, 3.4, 2.6, 64, Math.atan2(dir.y, dir.x));
-    const bw = add(capGeometry(basin, [], 8.7, 1), createPoolWaterMaterial(), { cast: false, receive: false, name: 'basin-water' });
+    const bw = add(capGeometry(basin, [], 8.9, 1), createPoolWaterMaterial(), { cast: false, receive: false, name: 'basin-water' });
     bw.material.uniforms = { ...bw.material.uniforms };
     bw.renderOrder = 3;
     const foam = new THREE.Mesh(
-      new THREE.CircleGeometry(1.6, 32).rotateX(-Math.PI / 2).translate(bx, 8.74, -by),
+      new THREE.CircleGeometry(1.8, 32).rotateX(-Math.PI / 2).translate(bx, 8.93, -by),
       sheetMaterial({ speed: 0.5, density: 8, opacity: 0.6, tint: [0.95, 0.98, 1.0] }),
     );
     foam.renderOrder = 5;
@@ -389,17 +389,6 @@ export function buildPool(ctx, root, M, plan) {
     ring(2.75, fp.z, 0.95, 0.36, M.travertineWall, 'sofa-plinth');
     ring(2.78, fp.z + 0.36, 0.9, 0.16, M.linen, 'sofa-seat');
     ring(3.18, fp.z + 0.36, 0.26, 0.56, M.linen, 'sofa-back');
-    // scatter cushions
-    const cush = [];
-    for (let i = 0; i < 9; i++) {
-      const a = a0 + (a1 - a0) * ((i + 0.5) / 9);
-      const g = new RoundedBoxGeometry(0.5, 0.42, 0.16, 4, 0.07);
-      g.rotateX(-0.25);
-      g.rotateY(-a + Math.PI / 2);
-      g.translate(fp.cx + Math.cos(a) * 3.0, fp.z + 0.78, -(fp.cy + Math.sin(a) * 3.0));
-      cush.push(g);
-    }
-    add(merge(cush), M.boucle, { name: 'cushions' });
     // fire bowl
     const bowl = new THREE.LatheGeometry(
       [V2(0, 0), V2(0.62, 0), V2(0.68, 0.06), V2(0.7, 0.38), V2(0.66, 0.42), V2(0.55, 0.42), V2(0.5, 0.36), V2(0, 0.36)],
@@ -468,7 +457,7 @@ export function buildPool(ctx, root, M, plan) {
     const edge = ellipse(fp.cx, fp.cy, fp.r - 0.25, fp.r - 0.25, 64);
     for (let i = 0; i < edge.length; i++) {
       const a = edge[i], b = edge[(i + 1) % edge.length];
-      const nearStair = Math.hypot(a.x - 16.9, a.y + 21.4) < 1.4;
+      const nearStair = Math.hypot(a.x - 17.0, a.y + 20.6) < 1.5;
       if (!nearStair) colliders.push({ type: 'seg', a: [a.x, a.y], b: [b.x, b.y], minY: 11.5, maxY: 14.5 });
     }
     colliders.push({ type: 'circle', c: [fp.cx, fp.cy], r: 0.75, minY: 11.5, maxY: 14.5 });

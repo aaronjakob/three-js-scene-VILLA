@@ -13,7 +13,7 @@ export const atmosphereUniforms = {
   uSunDir: { value: sunDirection(new THREE.Vector3()) },
   uTime: { value: 0 },
   uSkyExposure: { value: 1.0 },
-  uHazeDensity: { value: 0.000115 },
+  uHazeDensity: { value: 0.00008 },
   uHazeHeight: { value: 320.0 },
   uHazeColor: { value: new THREE.Color(0.56, 0.68, 0.84) },
   uSunHazeColor: { value: new THREE.Color(0.95, 0.86, 0.70) },
@@ -100,7 +100,7 @@ vec3 vh_sky(vec3 d, bool withSun) {
   vec4 cl = vh_clouds(dir);
   col = mix(col, cl.rgb * (0.6 + 0.4 * vh_skyBase(normalize(dir + vec3(0.0, 0.4, 0.0))).b / 0.7), cl.a);
   // below horizon (used by env map): dark marine blue-grey
-  col = mix(col, vec3(0.055, 0.105, 0.16), smoothstep(0.0, 0.08, below));
+  col = mix(col, vec3(0.20, 0.205, 0.20), smoothstep(0.0, 0.08, below));
   return col * uSkyExposure;
 }
 `;

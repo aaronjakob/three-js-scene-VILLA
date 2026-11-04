@@ -175,6 +175,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
   let raf = 0;
   let mode = 'backdrop';
   let lost = false; // WebGL context lost
+  let evCur = 0;
   const clock = new THREE.Timer();
   let animateWater = !reducedMotion && options.animate !== false;
 
@@ -235,6 +236,9 @@ async function buildLive(container, options, gpu, q, cleanup) {
     const gl = renderer.getContext();
     const prof = options.profile;
     const t0 = performance.now();
+    // ease exposure between views (snap for single stills / reduced motion)
+    evCur = dt > 0 && !reducedMotion ? evCur + (rig.ev - evCur) * Math.min(1, dt * 2.5) : rig.ev;
+    pipeline.evOffset = evCur;
     if (reflection) reflection.update(camera);
     if (prof) { gl.finish(); stats.reflMs = performance.now() - t0; }
     pipeline.profile = prof ? (k) => { gl.finish(); pipeline.times[k] = performance.now(); } : null;
@@ -252,7 +256,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
     clock.update();
     const dt = Math.min(clock.getDelta(), 0.1);
     const moving = rig.update(dt);
-    const live = moving || (animateWater && mode === 'explore');
+    const live = moving || (animateWater && mode === 'explore') || Math.abs(evCur - rig.ev) > 0.01;
     if (needsRender || live) {
       needsRender = false;
       renderFrame(dt);

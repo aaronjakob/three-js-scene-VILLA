@@ -96,7 +96,7 @@ export function buildLandscapeDetail(ctx) {
   const poolPad = offset(poolOutline(), 1.2);
   const blocked = (x, y) =>
     pointInPoly(x, y, deck) ||
-    pointInPoly(x, y, poolPad) ||
+    (pointInPoly(x, y, poolPad) && field.height(x, y) > 14.8) ||
     Math.hypot(x - COURT.cx, y - COURT.cy) < COURT.r + 0.5 ||
     Math.hypot(x - FIREPIT.cx, y - FIREPIT.cy) < FIREPIT.r + 0.4 ||
     polyProject(FIRE_STAIR_PTS, x, y).d < 1.4 ||

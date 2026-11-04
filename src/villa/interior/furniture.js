@@ -33,7 +33,16 @@ function place(g, x, y, z = Z, rot = 0) {
   return g;
 }
 function rbox(w, h, d, r = 0.05, seg = 4) {
-  return new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3));
+  const g = new RoundedBoxGeometry(w, h, d, seg, Math.min(r, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3));
+  const pos = g.attributes.position, nrm = g.attributes.normal, uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) {
+    const ax = Math.abs(nrm.getX(i)), ay = Math.abs(nrm.getY(i)), az = Math.abs(nrm.getZ(i));
+    const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i);
+    if (ay >= ax && ay >= az) uv.setXY(i, px, pz);
+    else if (ax >= az) uv.setXY(i, pz, py);
+    else uv.setXY(i, px, py);
+  }
+  return g;
 }
 function at(g, lx, ly, lz) { g.translate(lx, ly, lz); return g; }
 
@@ -321,6 +330,11 @@ export function buildInterior(ctx) {
       }
     }
     B.push(M.ledSoft, place(rbox(cw - 0.1, 0.006, 0.01, 0.002, 1), cmid, wy + 0.0, Z + 1.82));
+    // appliances in the tall units: two black-glass ovens, induction hob, slim bronze hood
+    for (const oz of [Z + 0.95, Z + 1.62]) B.push(M.monitorBody, place(rbox(0.62, 0.6, 0.02, 0.01, 2), x0 + 0.75, wy - 0.335, oz));
+    B.push(M.brass, place(rbox(0.5, 0.012, 0.012, 0.004, 1), x0 + 0.75, wy - 0.355, Z + 1.27));
+    B.push(M.monitorBody, place(rbox(0.86, 0.006, 0.52, 0.01, 2), cmid - 0.9, wy - 0.04, Z + 0.912));
+    B.push(M.brass, place(rbox(0.95, 0.22, 0.5, 0.02, 2), cmid - 0.9, wy + 0.0, Z + 1.75));
     // upper cabinets above the shelves, up to the ceiling
     B.push(M.walnut, place(rbox(x1 - x0, 1.1, 0.66, 0.01, 2), (x0 + x1) / 2, wy, Z + 3.55));
     // island pendants: three opal globes
@@ -337,8 +351,9 @@ export function buildInterior(ctx) {
     B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 2.4, 8.9, Z + 0.39));
     B.push(M.darkStone, place(rbox(0.36, 0.78, 0.36, 0.02, 2), 3.6, 8.9, Z + 0.39));
     B.push(M.ceramicDark, place(new THREE.LatheGeometry([V2(0, 0), V2(0.12, 0), V2(0.18, 0.2), V2(0.1, 0.5), V2(0.06, 0.56), V2(0, 0.56)], 32), 2.6, 8.9, Z + 0.86));
-    lights.push([3.0, 8.4, Z + 3.4, 6, 10]);
-    lights.push([6.5, 8.8, Z + 3.2, 4, 8]);
+    lights.push([3.0, 8.4, Z + 3.4, 12, 12]);
+    lights.push([6.5, 8.8, Z + 3.2, 8, 10]);
+    lights.push([-0.8, 9.2, Z + 3.2, 6, 9]);
   }
 
   // ===================== UPPER FLOOR (seen through the glazing) ==========

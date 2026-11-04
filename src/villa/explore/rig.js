@@ -96,6 +96,12 @@ export class CameraRig {
     return { pos: toThree(v.position), target: toThree(v.target), fov: v.fov };
   }
 
+  // exposure compensation (EV) of the current view, eased during transitions
+  get ev() {
+    const v = VIEW_BY_ID[this.currentView];
+    return this.explore ? 0.2 : v?.ev ?? 0;
+  }
+
   setView(id, { instant = false, duration } = {}) {
     if (!VIEW_BY_ID[id]) return;
     const to = this.viewPose(id);

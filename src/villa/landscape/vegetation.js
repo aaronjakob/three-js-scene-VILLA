@@ -15,8 +15,13 @@ import { VIEWS } from '../core/anchors.js';
 // Art-directed planting: no tree may stand in the sightline of an exterior
 // camera between the lens and its subject (shrubs stay).
 const SIGHTLINES = VIEWS.filter((v) => !v.interior).map((v) => ({ a: v.position, b: v.target }));
-function blocksSightline(x, y, z, height = 8) {
+function blocksSightline(x, y, z, height = 8, near = 26) {
   for (const { a, b } of SIGHTLINES) {
+    // anything tall within `near` metres in front of the lens fills the frame
+    const fx = b[0] - a[0], fy = b[1] - a[1];
+    const dx = x - a[0], dy = y - a[1];
+    const dd = Math.hypot(dx, dy);
+    if (dd < near && (dx * fx + dy * fy) > 0 && z + height > a[2] - 9) return true;
     const ex = b[0] - a[0], ey = b[1] - a[1];
     const L2 = ex * ex + ey * ey;
     let t = ((x - a[0]) * ex + (y - a[1]) * ey) / L2;
@@ -420,7 +425,7 @@ export function buildVegetation(ctx) {
   const placeShrub = (x, y, z, s, set = shrubVariants, prefix = 'shrub') => {
     const vi = Math.floor(rng() * set.length);
     const r = rng();
-    const t = new THREE.Color(0.8 + r * 0.35, 0.85 + r * 0.25, 0.65 + rng() * 0.35);
+    const t = new THREE.Color(0.82 + r * 0.3, 0.8 + r * 0.2, 0.62 + rng() * 0.3);
     push(`${prefix}-${vi}`, null, set[vi], mtx(x, y, z - 0.05, s, rng() * Math.PI * 2, 0.2), t);
   };
 
@@ -449,6 +454,7 @@ export function buildVegetation(ctx) {
       if (nearSea && sp !== 'pine') continue;
       placeTree(sp, x, y, h, 0.75 + rng() * 0.55);
     } else if (r < 0.92) {
+      if (blocksSightline(x, y, h, 2.2, 13)) continue;
       placeShrub(x, y, h, (0.7 + rng() * 1.0) * (slope > 0.45 ? 0.8 : 1.15) * (viewCorridor ? 0.8 : 1));
     }
   }
@@ -485,6 +491,7 @@ export function buildVegetation(ctx) {
     const r = COURT.r + 0.9 + rng() * 3.5;
     const x = COURT.cx + Math.cos(a) * r, y = COURT.cy + Math.sin(a) * r;
     if (y < 13 || (y > 28 && Math.abs(x - 3.5) < 4)) continue;
+    if (blocksSightline(x, y, field.height(x, y), 2.0, 13)) continue;
     placeShrub(x, y, field.height(x, y), 0.8 + rng() * 0.6);
   }
   // deck planters (olives in stone planters) on the terraces
@@ -529,6 +536,13 @@ export function buildVegetation(ctx) {
       placeShrub(p.x, p.y, LEVEL.roof + 0.22, 0.8 + rng() * 0.6);
     }
   }
+  // planted entry canopy: the L1 bulge over the door is a green roof too
+  for (let i = 0; i < 260 * density; i++) {
+    const x = -1.5 + rng() * 10, y = 11.0 + rng() * 5.4;
+    if (!pointInPoly(x, y, offset(l1, -0.4)) || pointInPoly(x, y, offset(upper, 0.6))) continue;
+    placeShrub(x, y, LEVEL.upper, 0.5 + rng() * 0.45, rng() < 0.6 ? groundCover : shrubVariants, rng() < 0.6 ? 'gc' : 'shrub');
+  }
+
   // L1 terrace edge planters (soil strip just inside the slab edge)
   {
     const strip = offset(l1, -0.6);
@@ -564,7 +578,7 @@ export function buildVegetation(ctx) {
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
           new THREE.Vector3(1, 0.8 + rng() * 0.5, 1),
         );
-        push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(1.15 + rng() * 0.25, 1.3, 1.0 + rng() * 0.2));
+        push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(1.25 + rng() * 0.2, 1.4, 0.75 + rng() * 0.15));
       }
     }
   };

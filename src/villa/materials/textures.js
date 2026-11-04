@@ -163,19 +163,17 @@ export function marble(kind = 'dark') {
   const s = new Simplex(kind === 'dark' ? 41 : 42);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const w1 = tileNoise(s, u, v, 3, 3, 5, 0, 0);
-    const w2 = tileNoise(s, u, v, 7, 7, 4, 3, 0);
-    const vein = Math.abs(Math.sin((u * 2.0 + v * 1.3 + w1 * 1.8) * Math.PI * 3));
-    const thin = Math.pow(1 - vein, 18);
-    const vein2 = Math.pow(1 - Math.abs(Math.sin((u * 3.1 - v * 2.2 + w2 * 2.4) * Math.PI * 5)), 30);
+    // ridged noise -> thin branching veins; a slow cloud for the ground mass
+    const r1 = 1 - Math.abs(tileNoise(s, u, v, 2, 3, 5, 0, 0));
+    const r2 = 1 - Math.abs(tileNoise(s, u, v, 5, 4, 4, 7, 3));
+    const cloud = tileNoise(s, u, v, 3, 3, 4, 19, 5);
+    const vein = Math.pow(r1, 26) * 1.0 + Math.pow(r2, 40) * 0.6;
     if (kind === 'dark') {
-      const l = 0.75 + w2 * 0.15;
-      const veinC = thin * 0.9 + vein2 * 0.5;
-      return [clamp255(26 * l + 190 * veinC), clamp255(26 * l + 176 * veinC), clamp255(28 * l + 150 * veinC)];
+      const l = 0.8 + cloud * 0.25;
+      return [clamp255(22 * l + 200 * vein), clamp255(22 * l + 186 * vein), clamp255(24 * l + 160 * vein)];
     }
-    const l = 0.96 + w2 * 0.03;
-    const veinC = thin * 0.55 + vein2 * 0.3;
-    return [clamp255(238 * l - 110 * veinC), clamp255(235 * l - 105 * veinC), clamp255(229 * l - 92 * veinC)];
+    const l = 0.97 + cloud * 0.04;
+    return [clamp255(240 * l - 120 * vein), clamp255(237 * l - 114 * vein), clamp255(231 * l - 100 * vein)];
   });
   const out = { map: tex };
   cache.set(key, out);

@@ -384,6 +384,9 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   float cliffZone = 1.0 - smoothstep(40.0, 75.0, length(wp.xz - vec2(0.0, 26.0)));
   float cliffK = cliffZone * smoothstep(0.06, 0.16, slope + n2 * 0.08) * (1.0 - smoothstep(15.5, 17.2, h));
   rockMask = max(rockMask, cliffK);
+  // under the cantilevered house/pool: shaded rock and soil, nothing grows
+  float underHouse = 1.0 - smoothstep(0.85, 1.05, length((wp.xz - vec2(0.0, 2.0)) / vec2(23.5, 16.5)));
+  rockMask = max(rockMask, underHouse * step(h, 17.45));
   float shore = 1.0 - smoothstep(0.4, 3.2 + n1 * 2.0, h);
   rockMask = max(rockMask, shore);
   float underwater = 1.0 - smoothstep(-1.2, 0.2, h);
@@ -410,7 +413,8 @@ vTWorldNormal = normalize(mat3(modelMatrix) * objectNormal);`,
   // vegetation clinging to ledges on the cliff
   float ledgeVeg = smoothstep(0.1, 0.5, n2 + 0.2) * (1.0 - smoothstep(0.35, 0.7, slope)) * (1.0 - shore);
   // the sun-facing sea cliff: darker, weathered, with vegetated ledges
-  rockCol *= mix(1.0, 0.72 + 0.28 * smoothstep(-0.3, 0.4, n1), cliffK);
+  float bands = 0.5 + 0.5 * sin(wp.y * 3.1 + n2 * 4.0 + n1 * 3.0);
+  rockCol *= mix(1.0, (0.55 + 0.3 * smoothstep(-0.3, 0.4, n1)) * (0.8 + 0.25 * bands), cliffK);
   vec3 col = mix(veg, rockCol, rockMask);
   col = mix(col, veg * 1.1, ledgeVeg * rockMask * 0.6);
   // wet dark band at the waterline
