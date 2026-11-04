@@ -278,7 +278,8 @@ export function installHaze() {
     float depthK = mix(0.62, 1.0, smoothstep(0.3, 1.0, ik)); // farther from glass = dimmer
     #if defined( RE_IndirectDiffuse )
       vec3 wN = inverseTransformDirection( geometryNormal, viewMatrix );
-      vec3 irrI = PI * textureCubeUV( uEnvInterior, envMapRotation * wN, 1.0 ).rgb * envMapIntensity * depthK;
+      // ×0.55: glass transmission + the probe sits in the brightest, most open spot
+      vec3 irrI = PI * textureCubeUV( uEnvInterior, envMapRotation * wN, 1.0 ).rgb * envMapIntensity * depthK * 0.55;
       iblIrradiance = mix( iblIrradiance, irrI, wI );
       irradiance *= mix(1.0, 0.6, wI);
     #endif
@@ -286,7 +287,7 @@ export function installHaze() {
       vec3 rv = reflect( -geometryViewDir, geometryNormal );
       rv = normalize( mix( rv, geometryNormal, material.roughness * material.roughness ) );
       rv = inverseTransformDirection( rv, viewMatrix );
-      vec3 radI = textureCubeUV( uEnvInterior, envMapRotation * rv, material.roughness ).rgb * envMapIntensity;
+      vec3 radI = textureCubeUV( uEnvInterior, envMapRotation * rv, material.roughness ).rgb * envMapIntensity * 0.75;
       radiance = mix( radiance, radI, wI );
     #endif
   } else

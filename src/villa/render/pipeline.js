@@ -197,7 +197,7 @@ export class Pipeline {
         uResolution: { value: new THREE.Vector2(1, 1) },
         uTonemap: { value: 1 },
         uGrain: { value: 0.012 },
-        uCA: { value: 0.0016 },
+        uCA: { value: 0.00035 },
       },
       vertexShader: quadVert,
       fragmentShader: finalFrag,
