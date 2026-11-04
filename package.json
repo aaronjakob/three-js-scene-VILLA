@@ -1,0 +1,23 @@
+{
+  "name": "coastal-villa",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Procedural cliffside villa environment for Personal OS (Three.js, no external assets).",
+  "main": "src/villa/index.js",
+  "exports": {
+    ".": "./src/villa/index.js"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 5173",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "stills": "node scripts/render-stills.mjs"
+  },
+  "dependencies": {
+    "three": "0.186.1"
+  },
+  "devDependencies": {
+    "vite": "8.2.4"
+  }
+}

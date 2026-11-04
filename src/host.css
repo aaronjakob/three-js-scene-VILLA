@@ -1,0 +1,21 @@
+:root {
+  --bg: #0d1116;
+  --dot: rgba(255, 255, 255, 0.38);
+  --dot-active: rgba(255, 255, 255, 0.92);
+}
+html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
+#villa { position: fixed; inset: 0; }
+.views {
+  position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+  display: flex; gap: 10px; padding: 8px 10px; border-radius: 999px;
+  opacity: 0; transition: opacity 240ms ease;
+}
+.views:hover, .views:focus-within, body.show-views .views { opacity: 1; }
+.views button {
+  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
+  background: var(--dot); cursor: pointer;
+}
+.views button[aria-current="true"] { background: var(--dot-active); }
+.views button:focus-visible { outline: 2px solid var(--dot-active); outline-offset: 3px; }
+body.still .views { display: none; }
+@media (prefers-reduced-motion: reduce) { .views { transition: none; } }
