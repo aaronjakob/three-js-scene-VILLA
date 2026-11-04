@@ -9,12 +9,23 @@ import { toThree, LEVEL } from '../core/world.js';
 
 const tmpV = new THREE.Vector3();
 
+// walkable spawn points (GLB plan coords, floor elevation) + facing yaw
+const SPAWNS = [
+  { p: [-1.0, -9.9, 18.0], yaw: Math.PI }, // pool deck, facing the sea
+  { p: [3.0, 15.5, 18.02], yaw: 0 }, // entry court, facing the door
+  { p: [14.8, -8.6, 18.0], yaw: Math.PI * 0.8 }, // east terrace
+  { p: [13.25, -16.2, 12.65], yaw: Math.PI }, // firepit terrace
+  { p: [-15.5, -4.0, 18.0], yaw: Math.PI * 1.2 }, // west terrace
+  { p: [-4.6, -0.4, 18.0], yaw: Math.PI }, // living room
+];
+
 function easeInOut(t) {
   return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
 }
 
 export class CameraRig {
-  constructor({ camera, canvas, field, villa, reducedMotion, onChange, onViewChange }) {
+  constructor({ camera, canvas, field, villa, reducedMotion, onChange, onViewChange, onExit }) {
+    this.onExit = onExit;
     this.camera = camera;
     this.canvas = canvas;
     this.field = field;
@@ -31,43 +42,53 @@ export class CameraRig {
     this.pos = new THREE.Vector3();
     this.velocityY = 0;
 
+    const MOVE = new Set(['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'KeyQ', 'KeyE', 'ShiftLeft', 'ShiftRight']);
+    // Keys are only taken while the canvas itself has focus in explore mode,
+    // never from host inputs, and never with modifier shortcuts.
     this._onKeyDown = (e) => {
-      if (!this.explore) return;
-      if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ShiftLeft', 'ShiftRight'].includes(e.code)) {
-        this.keys.add(e.code);
-        e.preventDefault();
-        this.onChange();
-      }
+      if (!this.explore || e.isComposing || e.defaultPrevented) return;
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.code === 'Escape') { e.preventDefault(); this.onExit?.(); return; }
+      if (!MOVE.has(e.code)) return;
+      this.keys.add(e.code);
+      e.preventDefault();
+      this.onChange();
     };
-    this._onKeyUp = (e) => {
-      this.keys.delete(e.code);
+    this._onKeyUp = (e) => { this.keys.delete(e.code); };
+    this._clearInput = () => {
+      this.keys.clear();
+      this._drag = null;
     };
+    this._onVisibility = () => { if (document.hidden) this._clearInput(); };
     this._drag = null;
     this._onPointerDown = (e) => {
       if (!this.explore) return;
-      this._drag = { x: e.clientX, y: e.clientY };
+      this._drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
       canvas.setPointerCapture?.(e.pointerId);
+      canvas.focus({ preventScroll: true });
     };
     this._onPointerMove = (e) => {
-      if (!this.explore) return;
-      let dx = 0, dy = 0;
-      if (document.pointerLockElement === canvas) {
-        dx = e.movementX; dy = e.movementY;
-      } else if (this._drag) {
-        dx = e.clientX - this._drag.x; dy = e.clientY - this._drag.y;
-        this._drag = { x: e.clientX, y: e.clientY };
-      } else return;
+      if (!this.explore || !this._drag || e.pointerId !== this._drag.id) return;
+      const dx = e.clientX - this._drag.x, dy = e.clientY - this._drag.y;
+      this._drag.x = e.clientX; this._drag.y = e.clientY;
       this.yaw -= dx * 0.0032;
       this.pitch = THREE.MathUtils.clamp(this.pitch - dy * 0.0032, -1.25, 1.25);
       this._applyLook();
       this.onChange();
     };
-    this._onPointerUp = () => { this._drag = null; };
-    window.addEventListener('keydown', this._onKeyDown);
-    window.addEventListener('keyup', this._onKeyUp);
+    this._onPointerUp = (e) => {
+      if (this._drag && e.pointerId === this._drag.id) this._drag = null;
+    };
+    canvas.addEventListener('keydown', this._onKeyDown);
+    canvas.addEventListener('keyup', this._onKeyUp);
+    canvas.addEventListener('blur', this._clearInput);
     canvas.addEventListener('pointerdown', this._onPointerDown);
-    window.addEventListener('pointermove', this._onPointerMove);
-    window.addEventListener('pointerup', this._onPointerUp);
+    canvas.addEventListener('pointermove', this._onPointerMove);
+    canvas.addEventListener('pointerup', this._onPointerUp);
+    canvas.addEventListener('pointercancel', this._onPointerUp);
+    canvas.addEventListener('lostpointercapture', this._onPointerUp);
+    window.addEventListener('blur', this._clearInput);
+    document.addEventListener('visibilitychange', this._onVisibility);
   }
 
   viewPose(id) {
@@ -118,19 +139,43 @@ export class CameraRig {
   setExplore(on) {
     this.explore = on;
     this.anim = null;
+    this._clearInput();
+    const c = this.canvas;
     if (on) {
       const d = this.camera.getWorldDirection(tmpV);
       this.yaw = Math.atan2(-d.x, -d.z);
-      this.pitch = Math.asin(THREE.MathUtils.clamp(d.y, -1, 1));
+      this.pitch = 0;
       this.pos.copy(this.camera.position);
-      // drop to human height if we were floating
-      const floor = this.floorHeight(this.pos.x, -this.pos.z, this.pos.y);
-      if (floor !== null && this.pos.y - floor > 2.5) this.pos.y = floor + LEVEL.eye;
+      const gx = this.pos.x, gy = -this.pos.z;
+      const floor = this.floorHeight(gx, gy, this.pos.y);
+      const v = VIEW_BY_ID[this.currentView];
+      if (v?.interior && floor !== null) {
+        this.pos.y = floor + LEVEL.eye;
+      } else {
+        // aerial / sea / roof cameras: start on the nearest walkable spot to the subject
+        const t = v ? v.target : [0, -6, 18];
+        let best = SPAWNS[0], bd = Infinity;
+        for (const sp of SPAWNS) {
+          const dd = Math.hypot(sp.p[0] - t[0], sp.p[1] - t[1]);
+          if (dd < bd) { bd = dd; best = sp; }
+        }
+        this.pos.copy(toThree([best.p[0], best.p[1], best.p[2] + LEVEL.eye]));
+        this.yaw = best.yaw;
+      }
       this.camera.fov = 62;
       this.camera.updateProjectionMatrix();
       this._applyLook();
-    } else if (document.pointerLockElement === this.canvas) {
-      document.exitPointerLock?.();
+      c.tabIndex = 0;
+      c.setAttribute('role', 'application');
+      c.setAttribute('aria-label', 'Coastal villa, walk mode');
+      c.removeAttribute('aria-hidden');
+      c.style.touchAction = 'none';
+      c.focus({ preventScroll: true });
+    } else {
+      c.tabIndex = -1;
+      c.removeAttribute('role');
+      c.setAttribute('aria-hidden', 'true');
+      c.style.touchAction = '';
     }
     this.onChange();
   }
@@ -170,11 +215,15 @@ export class CameraRig {
     }
     if (this.explore && this.keys.size) {
       const speed = (this.keys.has('ShiftLeft') || this.keys.has('ShiftRight') ? 4.2 : 1.9) * dt;
+      // keyboard-only turning: Left/Right arrows or Q/E
+      const turn = (this.keys.has('ArrowLeft') || this.keys.has('KeyQ') ? 1 : 0) - (this.keys.has('ArrowRight') || this.keys.has('KeyE') ? 1 : 0);
+      this.yaw += turn * 1.4 * dt;
       let fx = 0, fz = 0;
       if (this.keys.has('KeyW') || this.keys.has('ArrowUp')) fz -= 1;
       if (this.keys.has('KeyS') || this.keys.has('ArrowDown')) fz += 1;
-      if (this.keys.has('KeyA') || this.keys.has('ArrowLeft')) fx -= 1;
-      if (this.keys.has('KeyD') || this.keys.has('ArrowRight')) fx += 1;
+      if (this.keys.has('KeyA')) fx -= 1;
+      if (this.keys.has('KeyD')) fx += 1;
+      if (!fx && !fz) { this._applyLook(); return true; }
       const len = Math.hypot(fx, fz) || 1;
       const s = Math.sin(this.yaw), c = Math.cos(this.yaw);
       const dx = ((fx * c + fz * s) / len) * speed;
@@ -231,11 +280,17 @@ export class CameraRig {
   }
 
   dispose() {
-    window.removeEventListener('keydown', this._onKeyDown);
-    window.removeEventListener('keyup', this._onKeyUp);
-    this.canvas.removeEventListener('pointerdown', this._onPointerDown);
-    window.removeEventListener('pointermove', this._onPointerMove);
-    window.removeEventListener('pointerup', this._onPointerUp);
+    const c = this.canvas;
+    c.removeEventListener('keydown', this._onKeyDown);
+    c.removeEventListener('keyup', this._onKeyUp);
+    c.removeEventListener('blur', this._clearInput);
+    c.removeEventListener('pointerdown', this._onPointerDown);
+    c.removeEventListener('pointermove', this._onPointerMove);
+    c.removeEventListener('pointerup', this._onPointerUp);
+    c.removeEventListener('pointercancel', this._onPointerUp);
+    c.removeEventListener('lostpointercapture', this._onPointerUp);
+    window.removeEventListener('blur', this._clearInput);
+    document.removeEventListener('visibilitychange', this._onVisibility);
   }
 }
 

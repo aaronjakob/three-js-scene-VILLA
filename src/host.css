@@ -7,15 +7,20 @@ html, body { margin: 0; height: 100%; background: var(--bg); overflow: hidden; }
 #villa { position: fixed; inset: 0; }
 .views {
   position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
-  display: flex; gap: 10px; padding: 8px 10px; border-radius: 999px;
+  display: flex; gap: 2px; padding: 4px 6px; border-radius: 999px;
   opacity: 0; transition: opacity 240ms ease;
 }
-.views:hover, .views:focus-within, body.show-views .views { opacity: 1; }
+.views:hover, .views:focus-within { opacity: 1; }
 .views button {
-  width: 8px; height: 8px; padding: 0; border: 0; border-radius: 50%;
-  background: var(--dot); cursor: pointer;
+  width: 24px; height: 24px; padding: 0; border: 0; background: none; cursor: pointer;
+  display: grid; place-items: center; border-radius: 50%;
 }
-.views button[aria-current="true"] { background: var(--dot-active); }
-.views button:focus-visible { outline: 2px solid var(--dot-active); outline-offset: 3px; }
+.views button::before {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--dot);
+}
+.views button[aria-current="true"]::before { background: var(--dot-active); }
+.views button:focus-visible { outline: 2px solid var(--dot-active); outline-offset: 0; }
+.villa-canvas:focus { outline: none; }
+.villa-canvas:focus-visible { outline: 2px solid rgba(255, 255, 255, 0.6); outline-offset: -2px; }
 body.still .views { display: none; }
 @media (prefers-reduced-motion: reduce) { .views { transition: none; } }

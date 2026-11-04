@@ -219,10 +219,22 @@ export function buildEnvironment(renderer) {
 
 // Replace three's fog with height-aware aerial perspective for every built-in
 // material. Must be installed before materials compile.
-let hazeInstalled = false;
+// Ref-counted: the chunks are restored when the last villa instance is disposed,
+// so other three.js scenes in the host keep stock fog/IBL behaviour.
+let hazeRefs = 0;
+let savedChunks = null;
+export function uninstallHaze() {
+  hazeRefs = Math.max(0, hazeRefs - 1);
+  if (hazeRefs === 0 && savedChunks) {
+    Object.assign(THREE.ShaderChunk, savedChunks);
+    savedChunks = null;
+  }
+}
 export function installHaze() {
-  if (hazeInstalled) return;
-  hazeInstalled = true;
+  hazeRefs++;
+  if (savedChunks) return;
+  savedChunks = {};
+  for (const k of ['fog_pars_vertex', 'fog_vertex', 'fog_pars_fragment', 'fog_fragment', 'lights_fragment_maps']) savedChunks[k] = THREE.ShaderChunk[k];
   THREE.ShaderChunk.fog_pars_vertex = /* glsl */ `
 #ifdef USE_FOG
   varying vec3 vHazeWorldPos;

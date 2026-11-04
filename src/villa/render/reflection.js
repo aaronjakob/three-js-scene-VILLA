@@ -104,12 +104,14 @@ export class ReflectionPlane {
     this.textureMatrix.multiply(vc.matrixWorldInverse);
 
     // hide reflective receivers + transparent water while rendering
+    if (!this.receivers) {
+      this.receivers = [];
+      scene.traverse((o) => {
+        if (o.isMesh && (o.material?.userData?.reflStrength !== undefined || o.material === this.poolWater || o.name === 'ocean' || o.name === 'pool-water')) this.receivers.push(o);
+      });
+    }
     const hidden = [];
-    scene.traverse((o) => {
-      if (o.isMesh && (o.material?.userData?.reflStrength !== undefined || o.material === this.poolWater || o.name === 'ocean' || o.name === 'pool-water')) {
-        if (o.visible) { o.visible = false; hidden.push(o); }
-      }
-    });
+    for (const o of this.receivers) if (o.visible) { o.visible = false; hidden.push(o); }
     const prevRT = renderer.getRenderTarget();
     const prevClip = renderer.clippingPlanes;
     renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, 1, 0), -h + 0.01)];

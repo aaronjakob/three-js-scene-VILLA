@@ -5,6 +5,13 @@ import { Simplex, mulberry32 } from '../core/noise.js';
 // No texture, HDRI or photo is downloaded.
 
 const cache = new Map();
+export function clearTextureCache() {
+  for (const v of cache.values()) {
+    if (v?.isTexture) v.dispose();
+    else if (v) for (const t of Object.values(v)) t?.isTexture && t.dispose();
+  }
+  cache.clear();
+}
 let maxAniso = 8;
 export function setMaxAnisotropy(a) { maxAniso = a; }
 

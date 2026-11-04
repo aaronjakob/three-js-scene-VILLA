@@ -81,6 +81,7 @@ export function detectWebGL2() {
       renderer: String(renderer || ''),
       maxTexture: gl.getParameter(gl.MAX_TEXTURE_SIZE),
       floatRT: !!gl.getExtension('EXT_color_buffer_float'),
+      floatLinear: !!gl.getExtension('OES_texture_float_linear'),
       clipControl: !!gl.getExtension('EXT_clip_control'),
     };
     gl.getExtension('WEBGL_lose_context')?.loseContext();
@@ -96,9 +97,10 @@ export function autoProfile(gpu, { mobile = false, lowMemory = false } = {}) {
   if (!gpu || !gpu.floatRT) return null;
   if (mobile || lowMemory) return null;
   const r = gpu.renderer.toLowerCase();
-  if (/swiftshader|llvmpipe|software|basic render/.test(r)) return 'low';
-  if (/rtx|radeon rx|radeon pro|geforce gtx 1[06-9]|geforce gtx 2|arc a7|arc b|apple m[1-9] (pro|max|ultra)|quadro|rx [5-9][0-9]{3}/.test(r)) return 'high';
-  if (/radeon\(tm\) [0-9]{3}m|radeon 7[0-9]0m|radeon 8[0-9]0m|780m|890m|iris xe|arc\(tm\) graphics|apple m[1-9]/.test(r)) return 'balanced';
+  // software rasterisers cannot run this scene interactively: use the still
+  if (/swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/.test(r)) return null;
+  if (/rtx|radeon rx|radeon pro|geforce gtx 1[06-9]|geforce gtx 2|arc(\(tm\))? a[57]|arc(\(tm\))? b|apple m[1-9] (pro|max|ultra)|quadro|rx [5-9][0-9]{3}/.test(r)) return 'high';
+  if (/radeon\(tm\) [0-9]{3}m|radeon 7[0-9]0m|radeon 8[0-9]0m|780m|880m|890m|iris\(r\)? ?xe|iris xe|arc\(tm\) graphics|arc graphics|apple m[1-9]|apple gpu/.test(r)) return 'balanced';
   if (/intel|uhd|hd graphics|mali|adreno|powervr/.test(r)) return 'low';
   return 'balanced';
 }

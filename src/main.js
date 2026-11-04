@@ -18,6 +18,7 @@ let saved = null;
 try { saved = localStorage.getItem('villa:view'); } catch {}
 
 const opts = {
+  fallbackBase: './renders/',
   quality: params.get('quality') ?? (still ? 'still' : 'auto'),
   view: params.get('view') ?? viewFromHash() ?? saved ?? 'aerial',
   animate: !still,
@@ -52,24 +53,25 @@ for (const v of villa.views) {
 }
 
 function go(id, push = true) {
+  const changed = id !== villa.view;
   villa.setView(id);
-  if (push && !still) history.pushState({ view: id }, '', `#view=${id}`);
+  if (push && changed && !still) history.pushState({ view: id }, '', `#view=${id}`);
 }
 
 window.addEventListener('popstate', () => {
-  const id = viewFromHash();
-  if (id) go(id, false);
+  go(viewFromHash() ?? 'aerial', false);
 });
 
+// Demo-host shortcuts. A host app (Personal OS) wires its own; these never
+// fire with modifiers, on key repeat, or while typing in an editable field.
 window.addEventListener('keydown', (e) => {
-  if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+  if (e.defaultPrevented || e.repeat || e.isComposing || e.ctrlKey || e.metaKey || e.altKey) return;
+  const t = e.target;
+  if (t instanceof HTMLInputElement || t instanceof HTMLTextAreaElement || t instanceof HTMLSelectElement || t?.isContentEditable) return;
+  if (villa.mode === 'explore') return; // the canvas owns keys while walking (Esc leaves)
   const v = villa.views.find((x) => x.key === e.key);
-  if (v && villa.mode !== 'explore') { go(v.id); return; }
-  if (e.key === 'e' || e.key === 'E') {
-    villa.setMode(villa.mode === 'explore' ? 'backdrop' : 'explore');
-  } else if (e.key === 'Escape' && villa.mode === 'explore') {
-    villa.setMode('backdrop');
-  }
+  if (v) { go(v.id); return; }
+  if (e.key === 'e' || e.key === 'E') villa.setMode('explore');
 });
 
 if (still) {

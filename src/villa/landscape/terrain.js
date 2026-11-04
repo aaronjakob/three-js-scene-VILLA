@@ -292,7 +292,7 @@ export function buildTerrainGeometry(field, { res = 640, half = 12000, a = 0.03 
 }
 
 // Heightmap textures for shoreline foam / shallow water tint in the ocean shader.
-export function buildHeightTexture(field, { size = 512, x0, y0, x1, y1 }) {
+export function buildHeightTexture(field, { size = 512, x0, y0, x1, y1, linear = true }) {
   const data = new Float32Array(size * size * 4);
   for (let j = 0; j < size; j++) {
     const gy = lerp(y0, y1, j / (size - 1));
@@ -307,8 +307,9 @@ export function buildHeightTexture(field, { size = 512, x0, y0, x1, y1 }) {
     }
   }
   const tex = new THREE.DataTexture(data, size, size, THREE.RGBAFormat, THREE.FloatType);
-  tex.minFilter = THREE.LinearFilter;
-  tex.magFilter = THREE.LinearFilter;
+  // float textures are only filterable with OES_texture_float_linear
+  tex.minFilter = linear ? THREE.LinearFilter : THREE.NearestFilter;
+  tex.magFilter = linear ? THREE.LinearFilter : THREE.NearestFilter;
   tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
   tex.needsUpdate = true;
   // world-space mapping: three.x = gx, three.z = -gy

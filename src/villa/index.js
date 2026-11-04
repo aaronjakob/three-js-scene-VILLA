@@ -7,8 +7,11 @@ import {
   createSkyDome,
   buildEnvironment,
   installHaze,
+  uninstallHaze,
   attachHazeToScene,
 } from './render/atmosphere.js';
+import { clearTextureCache } from './materials/textures.js';
+import { resetMaterials } from './materials/library.js';
 import { Pipeline } from './render/pipeline.js';
 import { TerrainField, buildTerrainGeometry, buildHeightTexture, createTerrainMaterial } from './landscape/terrain.js';
 import { createOcean, generateWaveTexture } from './landscape/ocean.js';
@@ -39,20 +42,37 @@ export async function createVilla(container, options = {}) {
   const lowMemory = (navigator.deviceMemory ?? 8) < 4;
   let qName = options.quality ?? 'auto';
   if (qName === 'auto') qName = autoProfile(gpu, { mobile, lowMemory });
-  if (!qName || !gpu) return createFallback(container, options);
+  if (!qName || !gpu || !PROFILES[qName]) return createFallback(container, options);
   const q = { ...PROFILES[qName], ...(options.overrides ?? {}) };
+  const cleanup = [];
+  try {
+    return await buildLive(container, options, gpu, q, cleanup);
+  } catch (err) {
+    // never leave a half-built canvas behind: fall back to the still
+    console.warn('[villa] live scene unavailable, using still', err);
+    for (const fn of cleanup.reverse()) { try { fn(); } catch { /* ignore */ } }
+    return createFallback(container, options);
+  }
+}
 
-  const reducedMotion =
-    options.reducedMotion ?? window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+const yieldToHost = () => new Promise((r) => setTimeout(r, 0));
+
+async function buildLive(container, options, gpu, q, cleanup) {
+  const mql = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+  let reducedMotion = options.reducedMotion ?? mql?.matches ?? false;
 
   installHaze();
+  cleanup.push(() => uninstallHaze());
 
   const canvas = document.createElement('canvas');
   canvas.className = 'villa-canvas';
-  canvas.style.cssText = 'display:block;width:100%;height:100%;outline:none;';
-  canvas.tabIndex = 0;
-  canvas.setAttribute('aria-label', 'Coastal villa');
+  canvas.style.cssText = 'display:block;width:100%;height:100%;';
+  // backdrop: not focusable, hidden from assistive tech; explore mode switches
+  // it to a focusable role="application" (see CameraRig.setExplore)
+  canvas.tabIndex = -1;
+  canvas.setAttribute('aria-hidden', 'true');
   container.appendChild(canvas);
+  cleanup.push(() => canvas.remove());
 
   const renderer = new THREE.WebGLRenderer({
     canvas,
@@ -70,6 +90,7 @@ export async function createVilla(container, options = {}) {
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.needsUpdate = true;
   renderer.autoClear = false;
+  cleanup.push(() => { renderer.dispose(); renderer.forceContextLoss(); });
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xffffff, 1, 2); // flag only: enables the haze chunk
@@ -77,7 +98,7 @@ export async function createVilla(container, options = {}) {
   camera.layers.enable(2); // layer 2 = distant scenery (skipped by the reflection pass)
 
   // --- environment -------------------------------------------------------
-  const envTex = buildEnvironment(renderer);
+  let envTex = buildEnvironment(renderer);
   scene.environment = envTex;
   scene.environmentIntensity = 1.0;
   const sky = createSkyDome();
@@ -109,9 +130,10 @@ export async function createVilla(container, options = {}) {
   terrain.castShadow = true;
   scene.add(terrain);
 
-  const heightNear = buildHeightTexture(field, { size: 512, x0: -260, y0: -320, x1: 260, y1: 120 });
-  const heightFar = buildHeightTexture(field, { size: 768, x0: -6000, y0: -6000, x1: 7000, y1: 600 });
-  const waveRT = generateWaveTexture(renderer);
+  const linear = gpu.floatLinear !== false;
+  const heightNear = buildHeightTexture(field, { size: 512, x0: -260, y0: -320, x1: 260, y1: 120, linear });
+  const heightFar = buildHeightTexture(field, { size: 768, x0: -6000, y0: -6000, x1: 7000, y1: 600, linear });
+  let waveRT = generateWaveTexture(renderer);
   const ocean = createOcean({ heightNear, heightFar, waveTexture: waveRT.texture });
   scene.add(ocean);
 
@@ -119,16 +141,21 @@ export async function createVilla(container, options = {}) {
   const T0 = performance.now();
   const lap = (k) => { if (options.profile) console.log(`[villa] ${k} ${(performance.now() - T0).toFixed(0)} ms`); };
   lap('terrain+ocean');
+  await yieldToHost();
   const detail = buildLandscapeDetail(ctx);
   ctx.rockMaterial = detail.material;
   lap('rocks');
+  await yieldToHost();
   const villa = buildVilla(ctx);
   lap('villa');
   ctx.villa = villa;
-  const interior = buildInterior(ctx);
+  await yieldToHost();
+  buildInterior(ctx);
   lap('interior');
+  await yieldToHost();
   const vegetation = buildVegetation(ctx);
   lap('vegetation');
+  await yieldToHost();
 
   attachHazeToScene(scene);
 
@@ -146,7 +173,8 @@ export async function createVilla(container, options = {}) {
   let needsRender = true;
   let running = true;
   let raf = 0;
-  let mode = options.mode ?? 'backdrop';
+  let mode = 'backdrop';
+  let lost = false; // WebGL context lost
   const clock = new THREE.Timer();
   let animateWater = !reducedMotion && options.animate !== false;
 
@@ -159,6 +187,7 @@ export async function createVilla(container, options = {}) {
     reducedMotion,
     onChange: () => invalidate(),
     onViewChange: (id) => options.onViewChange?.(id),
+    onExit: () => api.setMode('backdrop'),
   });
   rig.setView(VIEW_BY_ID[options.view] ? options.view : 'aerial', { instant: true });
   if (options.camera) {
@@ -173,8 +202,10 @@ export async function createVilla(container, options = {}) {
     const w = Math.max(2, Math.round(options.width ?? r.width));
     const h = Math.max(2, Math.round(options.height ?? r.height));
     const pr = options.width ? 1 : Math.min(window.devicePixelRatio || 1, q.pixelRatio);
-    width = Math.round(w * pr);
-    height = Math.round(h * pr);
+    const nw = Math.round(w * pr), nh = Math.round(h * pr);
+    if (nw === width && nh === height) return;
+    width = nw;
+    height = nh;
     renderer.setPixelRatio(1);
     renderer.setSize(width, height, false);
     canvas.style.width = options.width ? `${w}px` : '100%';
@@ -183,12 +214,17 @@ export async function createVilla(container, options = {}) {
     camera.updateProjectionMatrix();
     pipeline.setSize(width, height);
     reflection?.setSize(width, height);
+    // resizing clears the canvas: redraw even while paused
+    if (!running && !lost) renderFrame(0);
     invalidate();
   }
 
   function invalidate() {
     needsRender = true;
-    if (running && !raf) raf = requestAnimationFrame(frame);
+    if (running && !lost && !raf) {
+      clock.update(); // wake: no stale delta after idling
+      raf = requestAnimationFrame(frame);
+    }
   }
 
   const stats = { frames: 0, lastMs: 0 };
@@ -212,7 +248,7 @@ export async function createVilla(container, options = {}) {
 
   function frame() {
     raf = 0;
-    if (!running) return;
+    if (!running || lost) return;
     clock.update();
     const dt = Math.min(clock.getDelta(), 0.1);
     const moving = rig.update(dt);
@@ -224,19 +260,67 @@ export async function createVilla(container, options = {}) {
     if (live) raf = requestAnimationFrame(frame);
   }
 
-  const ro = new ResizeObserver(() => resize());
+  let resizeQueued = false;
+  const ro = new ResizeObserver(() => {
+    if (resizeQueued) return;
+    resizeQueued = true;
+    requestAnimationFrame(() => { resizeQueued = false; resize(); });
+  });
   ro.observe(container);
+  let dprQuery = null;
+  const onDpr = () => { watchDpr(); resize(); };
+  function watchDpr() {
+    dprQuery?.removeEventListener('change', onDpr);
+    dprQuery = window.matchMedia?.(`(resolution: ${window.devicePixelRatio}dppx)`);
+    dprQuery?.addEventListener('change', onDpr);
+  }
+  watchDpr();
+  const onMotion = () => {
+    if (options.reducedMotion !== undefined) return;
+    reducedMotion = !!mql.matches;
+    rig.reducedMotion = reducedMotion;
+    animateWater = !reducedMotion && options.animate !== false;
+    invalidate();
+  };
+  mql?.addEventListener('change', onMotion);
+
+  // GPU context loss (sleep, driver reset): regenerate what lived only on the GPU
+  const onLost = (e) => { e.preventDefault(); lost = true; cancelAnimationFrame(raf); raf = 0; };
+  const onRestored = () => {
+    lost = false;
+    envTex.dispose();
+    envTex = buildEnvironment(renderer);
+    scene.environment = envTex;
+    waveRT.dispose();
+    waveRT = generateWaveTexture(renderer);
+    ocean.material.uniforms.tWave.value = waveRT.texture;
+    renderer.shadowMap.needsUpdate = true;
+    width = height = 0;
+    resize();
+  };
+  canvas.addEventListener('webglcontextlost', onLost);
+  canvas.addEventListener('webglcontextrestored', onRestored);
+
   resize();
+  // compile every program off the critical path before the first frame
+  if (renderer.compileAsync) await renderer.compileAsync(scene, camera);
 
   const api = {
     quality: q.name,
     gpu,
     views: VIEWS.map(({ id, label, key }) => ({ id, label, key })),
     get view() { return rig.currentView; },
-    setView(id, opts) { rig.setView(id, opts); invalidate(); },
+    setView(id, opts) {
+      if (mode === 'explore') { mode = 'backdrop'; rig.setExplore(false); }
+      rig.setView(id, opts);
+      invalidate();
+    },
     setMode(m) {
+      if (m === mode) return;
       mode = m;
       rig.setExplore(m === 'explore');
+      if (m === 'backdrop' && rig.currentView) rig.setView(rig.currentView, { instant: reducedMotion });
+      options.onModeChange?.(m);
       invalidate();
     },
     get mode() { return mode; },
@@ -280,11 +364,17 @@ export async function createVilla(container, options = {}) {
       running = false;
       cancelAnimationFrame(raf);
       ro.disconnect();
+      dprQuery?.removeEventListener('change', onDpr);
+      mql?.removeEventListener('change', onMotion);
+      canvas.removeEventListener('webglcontextlost', onLost);
+      canvas.removeEventListener('webglcontextrestored', onRestored);
       rig.dispose();
       pipeline.dispose();
       reflection?.dispose();
       scene.traverse((o) => {
+        if (o.isInstancedMesh) o.dispose();
         o.geometry?.dispose?.();
+        if (o.isLight && o.shadow) o.shadow.dispose();
         const mats = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
         for (const m of mats) {
           for (const k in m) if (m[k]?.isTexture) m[k].dispose();
@@ -295,12 +385,17 @@ export async function createVilla(container, options = {}) {
       heightNear.dispose();
       heightFar.dispose();
       waveRT.dispose();
+      clearTextureCache();
+      resetMaterials();
       renderer.dispose();
+      renderer.forceContextLoss();
       canvas.remove();
+      uninstallHaze();
     },
   };
 
   if (options.debug) buildDebugMarkers(ctx);
+  if (mode === 'explore') { mode = 'backdrop'; api.setMode('explore'); }
   invalidate();
   return api;
 }
@@ -313,6 +408,8 @@ function createFallback(container, options) {
   const view = options.view ?? 'aerial';
   const base = options.fallbackBase ?? './renders/';
   img.src = options.fallbackImage ?? `${base}${view}.jpg`;
+  img.onerror = () => { img.style.visibility = 'hidden'; };
+  img.onload = () => { img.style.visibility = ''; };
   container.appendChild(img);
   return {
     quality: 'fallback',
