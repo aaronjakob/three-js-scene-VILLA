@@ -72,7 +72,7 @@ export function buildInterior(ctx) {
     // throw over the return seat front
     {
       const parts = D.drapedThrow(M.herringbone, { w: 0.95, onSeat: 0.5, hang: 0.3, seatY: 0.475, edgeR: 0.07, seed: 4 });
-      putParts(parts, -9.08, -3.75, Z, Math.PI / 2 + 0.06);
+      putParts(parts, -8.9, -3.75, Z, Math.PI / 2 + 0.06);
     }
 
     // ---- two dark marble drums (veined), large low + small high
@@ -197,7 +197,7 @@ export function buildInterior(ctx) {
     // ---- feature wall dressing (south face of the wall at y = 4.7 - 0.18)
     const fy = 4.7 - 0.19;
     // walnut slats x -17.0 .. -12.4
-    for (let x = -17.0; x < -12.4; x += 0.095) put(M.walnut, swapUV(rbox(0.045, 4.1, 0.06, 0.006, 1)), x, fy - 0.03, Z + 2.05);
+    for (let x = -17.0; x < -12.4; x += 0.095) put(M.walnut, rbox(0.045, 4.1, 0.06, 0.006, 1), x, fy - 0.03, Z + 2.05);
     // backlit shelving niche x -12.2 .. -8.6
     {
       const x0 = -12.2, x1 = -8.6, xm = (x0 + x1) / 2;
@@ -297,8 +297,8 @@ export function buildInterior(ctx) {
       const n = 7, fw = bodyL / n;
       for (let i = 0; i < n; i++) {
         const fx = kx - bodyL / 2 + fw * (i + 0.5);
-        put(M.walnut, swapUV(at(rbox(fw - 0.004, iH - tT - 0.11, 0.019, 0.002, 1), 0, (iH - tT - 0.11) / 2 + 0.1, 0)), fx, iy + iD / 2 - 0.05, Z, 0);
-        put(M.walnut, swapUV(at(rbox(fw - 0.004, iH - tT - 0.11, 0.019, 0.002, 1), 0, (iH - tT - 0.11) / 2 + 0.1, 0)), fx, iy - iD / 2 + 0.05, Z, Math.PI);
+        put(M.walnut, at(rbox(fw - 0.004, iH - tT - 0.11, 0.019, 0.002, 1), 0, (iH - tT - 0.11) / 2 + 0.1, 0), fx, iy + iD / 2 - 0.05, Z, 0);
+        put(M.walnut, at(rbox(fw - 0.004, iH - tT - 0.11, 0.019, 0.002, 1), 0, (iH - tT - 0.11) / 2 + 0.1, 0), fx, iy - iD / 2 + 0.05, Z, Math.PI);
       }
     }
     // sink + bronze tap, chopping board, fruit bowl
@@ -332,7 +332,7 @@ export function buildInterior(ctx) {
     const doorRow = (xa, xb, z0, h, n, mat = M.walnut) => {
       const w = (xb - xa) / n;
       for (let i = 0; i < n; i++) {
-        put(mat, swapUV(at(rbox(w - 0.004, h - 0.004, 0.02, 0.002, 1), 0, h / 2, 0)), xa + w * (i + 0.5), wyF + 0.01, z0, Math.PI);
+        put(mat, at(rbox(w - 0.004, h - 0.004, 0.02, 0.002, 1), 0, h / 2, 0), xa + w * (i + 0.5), wyF + 0.01, z0, Math.PI);
       }
     };
     // carcasses (dark recess behind the reveals)
@@ -352,8 +352,8 @@ export function buildInterior(ctx) {
       for (const [oz, oh] of [[Z + 0.8, 0.6], [Z + 1.42, 0.46]]) {
         put(M.blackGlass, at(rbox(0.6, oh - 0.01, 0.02, 0.004, 1), 0, oh / 2, 0), ox, wyF - 0.005, oz);
         put(M.brass, at(rbox(0.5, 0.014, 0.022, 0.006, 1), 0, 0, 0), ox, wyF - 0.03, oz + oh - 0.06);
-        put(M.walnut, swapUV(at(rbox(0.44, oh, 0.02, 0.002, 1), 0, oh / 2, 0)), ox - 0.52, wyF + 0.01, oz, Math.PI);
-        put(M.walnut, swapUV(at(rbox(0.44, oh, 0.02, 0.002, 1), 0, oh / 2, 0)), ox + 0.52, wyF + 0.01, oz, Math.PI);
+        put(M.walnut, at(rbox(0.44, oh, 0.02, 0.002, 1), 0, oh / 2, 0), ox - 0.52, wyF + 0.01, oz, Math.PI);
+        put(M.walnut, at(rbox(0.44, oh, 0.02, 0.002, 1), 0, oh / 2, 0), ox + 0.52, wyF + 0.01, oz, Math.PI);
       }
       doorRow(x0 + 1.5, x0 + 3.0, Z + 1.88, 1.12, 2);
     }

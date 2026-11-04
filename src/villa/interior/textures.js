@@ -355,7 +355,6 @@ export function leatherTextures() {
 export function rugTextures(kind = 'living') {
   return cached('rug-' + kind, () => {
     const W = 1024, H = 768;
-    const rng = mulberry32(kind === 'living' ? 101 : 102);
     const abrash = noiseTile(512, 3, 103, 4, 0.6, 1, 0.3);
     const mott = noiseTile(512, 24, 104, 3, 0.5);
     const wob = noiseTile(512, 6, 105, 3, 0.5);
@@ -368,13 +367,11 @@ export function rugTextures(kind = 'living') {
       const u = x / W, v = y / H;
       const su = u * 512, sv = v * 512;
       const ab = samp(abrash, 512, su, sv), mo = samp(mott, 512, su * 3, sv * 3), wb = samp(wob, 512, su, sv);
-      const e = Math.min(u, 1 - u, (v) * (H / W) / (H / W), 1 - v);
       const ev = Math.min(u * W, (1 - u) * W, v * H, (1 - v) * H) / W;
-      void e;
-      let c = base;
+      const c = base;
       let l = 1 + ab * 0.05 + mo * 0.035;
       // lattice: rotated grid lines with hand-drawn wobble
-      const gu = (u * W + v * H * 0.0) / W, gv = (v * H) / W;
+      const gu = u, gv = (v * H) / W;
       const p1 = (gu + gv) / cell + wb * 0.18, p2 = (gu - gv) / cell + wb * 0.18;
       const f1 = Math.abs(p1 - Math.round(p1)), f2 = Math.abs(p2 - Math.round(p2));
       const lw = 0.045;
@@ -393,7 +390,6 @@ export function rugTextures(kind = 'living') {
       if (Math.abs(ev - bi) < 0.0018) l *= 0.82;
       d[k] = clamp255(r * l); d[k + 1] = clamp255(g * l); d[k + 2] = clamp255(b * l);
     });
-    void rng;
     return { map: toTex(col, { wrap: false }) };
   });
 }
@@ -554,7 +550,7 @@ export function screenTexture(seed) {
         for (let xx = 6; xx < pw - 6; xx += 4) { yy += (rng() - 0.48) * 9; yy = Math.max(y + 26, Math.min(y + ph - 8, yy)); ctx.lineTo(x + xx, yy); }
         ctx.strokeStyle = colr; ctx.lineWidth = 1.6; ctx.stroke();
         ctx.lineTo(x + pw - 6, y + ph - 4); ctx.lineTo(x + 6, y + ph - 4); ctx.closePath();
-        ctx.fillStyle = colr.replace(')', '').replace('#', '') && 'rgba(80,140,220,0.10)';
+        ctx.fillStyle = 'rgba(80,140,220,0.10)';
         ctx.fill();
       } else if (kind === 'table') {
         for (let r = 0; r < Math.floor((ph - 30) / 15); r++) {
