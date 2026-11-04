@@ -53,6 +53,7 @@ uniform vec3 uDeep;
 uniform vec3 uAbsorb;
 uniform vec3 uAmbient;
 uniform vec2 uWindDir;
+uniform float uDebug;
 varying vec3 vWorld;
 
 // weight of the near texture inside its bounds (soft border)
@@ -201,40 +202,69 @@ void main() {
   float Gm = vw_smithG1(Vc.y, sig) * vw_smithG1(L.y, sig);
   float FH = vw_fresnel(max(dot(Vc, Hh), 0.0));
   vec3 glint = uSunColor * uGlint * FH * pdf * Gm / (4.0 * Vc.y * pow(Hh.y, 4.0));
+  // sub-pixel facets: few, very bright glints per pixel rather than a smooth
+  // sheen (mean-preserving random field at the pixel-footprint scale)
+  {
+    float fpx = max(length(fwidth(P.xz)), 1e-3);
+    float lv = log2(fpx * 1.7);
+    float l0 = floor(lv);
+    float fr = lv - l0;
+    vec2 c0 = floor(P.xz / exp2(l0) + uTime * 0.7);
+    vec2 c1 = floor(P.xz / exp2(l0 + 1.0) + uTime * 0.35);
+    float dens = 0.22;
+    float sp0 = step(1.0 - dens, vh_hash12(c0 * 0.731 + 13.1)) / dens;
+    float sp1 = step(1.0 - dens, vh_hash12(c1 * 0.913 - 7.3)) / dens;
+    float sp = mix(sp0, sp1, fr);
+    float unres = clamp((var - 0.5 * dot(c2.xy, c2.xy)) / var, 0.0, 1.0);
+    float k = unres * (1.0 - smoothstep(250.0, 1400.0, dist));
+    glint *= mix(1.0, sp, k * 0.85);
+  }
   glint = min(glint, vec3(60.0));
 
   vec3 col = mix(body, refl, F) + glint;
 
-  // --- surf foam along the coastline
+  // --- surf foam along the coastline: intermittent, lacy, strongest on
+  // exposed headlands, travelling bands that break up offshore
   float fw = max(length(fwidth(P.xz)), 1e-3);
   float shoreFoam = 0.0;
-  if (sdf < 60.0) {
+  if (sdf < 70.0) {
     vec2 fp = g;
+    float nA = vh_fbm2(fp * 0.021 + 7.7, 3);      // along-shore activity (tens of m)
     float nW = vh_fbm2(fp * 0.08 + 1.3, 3);
     float nW2 = vh_fbm2(fp * 0.31 - 4.1, 3);
-    float s = sdf + (nW - 0.45) * 4.0 + (nW2 - 0.45) * 1.4;
-    // wash zone hugging the rocks
-    float wash = 1.0 - smoothstep(0.2, 1.4 + 2.2 * expo, s);
+    float act = smoothstep(0.22, 0.62, nA) * (0.3 + 0.7 * expo);
+    float s = sdf + (nW - 0.45) * 3.0 + (nW2 - 0.45) * 1.2;
+    // wash zone hugging the rocks: width and density vary along the shore
+    float wW = 0.5 + 2.4 * act;
+    float wash = (1.0 - smoothstep(0.0, wW, s)) * (0.35 + 0.65 * act) * smoothstep(-1.5, 0.2, s + 1.0);
     // surf lines travelling toward the shore, broken along their length
-    float ph = s * 0.62 + uTime * 0.9 + nW * 5.0;
-    float lines = pow(0.5 + 0.5 * cos(ph), 9.0);
-    float broken = smoothstep(0.35, 0.75, vh_fbm2(vec2(fp.x + fp.y * 0.3, fp.y - fp.x * 0.3) * 0.09 + nW2, 3) + 0.25 * expo);
-    lines *= broken * (1.0 - smoothstep(4.0, 26.0, s)) * smoothstep(0.8, 2.0, s) * (0.25 + 0.75 * expo);
-    // residual lace drifting off the surf zone
-    float resid = (1.0 - smoothstep(3.0, 30.0 + 20.0 * expo, s)) * 0.35 * (0.4 + 0.6 * expo);
-    float cover = clamp(max(max(wash, lines), resid * (0.5 + 0.5 * nW2)), 0.0, 1.0);
+    float ph = s * 0.55 + uTime * 0.9 + nW * 6.0;
+    float lines = pow(0.5 + 0.5 * cos(ph), 10.0);
+    float broken = smoothstep(0.45, 0.8, vh_fbm2(vec2(fp.x + fp.y * 0.3, fp.y - fp.x * 0.3) * 0.11 + nW2 * 1.7, 3) + 0.2 * act);
+    lines *= broken * act * (1.0 - smoothstep(3.0, 20.0, s)) * smoothstep(1.0, 2.5, s);
+    // residual foam streaks drifting off the surf zone
+    float resid = (1.0 - smoothstep(2.0, 14.0 + 22.0 * act, s)) * smoothstep(0.5, 0.75, nW2) * 0.45 * act;
+    float cover = clamp(max(max(wash, lines * 0.9), resid), 0.0, 1.0);
     // lacy structure, faded to its mean where a pixel covers many cells
-    float cell = 1.6;
+    float cell = 1.3;
     float lace = vw_lace(fp / cell + vec2(uTime * 0.05, 0.0), nW2);
     float detail = clamp(fw / cell, 0.0, 1.0);
-    float pat = mix(lace, 0.5, smoothstep(0.15, 0.7, detail));
-    shoreFoam = smoothstep(1.0 - cover, 1.0 - cover + 0.35, pat + cover * 0.25) * cover;
-    shoreFoam *= 1.0 - smoothstep(900.0, 4000.0, dist);
+    float pat = mix(lace, 0.45, smoothstep(0.2, 0.8, detail));
+    shoreFoam = smoothstep(1.0 - cover, 1.0 - cover + 0.3, pat + cover * 0.2) * cover;
+    shoreFoam *= 1.0 - smoothstep(1200.0, 5000.0, dist);
   }
   vec3 foamCol = vec3(0.86, 0.89, 0.90) * (uAmbient * 0.3183 + uSunColor * 0.12) * uSkyExposure;
   col = mix(col, foamCol, clamp(shoreFoam, 0.0, 0.95));
 
   col = vh_applyHaze(col, P, cameraPosition);
+  if (uDebug > 0.5) {
+    if (uDebug < 1.5) col = refl;
+    else if (uDebug < 2.5) col = vec3(F);
+    else if (uDebug < 3.5) col = body;
+    else if (uDebug < 4.5) col = glint;
+    else if (uDebug < 5.5) col = vec3(shoreFoam);
+    else col = vec3(sig * 5.0);
+  }
   gl_FragColor = vec4(col, 1.0);
 }
 `;
@@ -247,12 +277,18 @@ void main() {
   float sy = vUv.y * vUv.y;
   float r = sqrt(max(1.0 - sy * sy, 0.0));
   float az = (vUv.x - 0.5) * 6.2831853;
-  vec3 d = vec3(r * sin(az), sy, -r * cos(az));
-  gl_FragColor = vec4(vh_sky(normalize(d), false), 1.0);
+  vec3 d = normalize(vec3(r * sin(az), sy, -r * cos(az)));
+  vec3 c = vh_sky(d, false);
+  // half of the broad warm sun glow: spread by the slope blur it would grey
+  // the whole sun-side sea; the glitter term carries the sun itself
+  float muc = max(dot(d, uSunDir), 0.0);
+  float hw = exp(-max(d.y, 0.0) * 7.0);
+  c -= vec3(1.0, 0.86, 0.58) * (pow(muc, 7.0) * 0.30 * (0.30 + 0.70 * hw) * 0.55 + pow(muc, 64.0) * 0.35 * 0.5) * uSkyExposure;
+  gl_FragColor = vec4(max(c, vec3(0.0)), 1.0);
 }
 `;
 
-function renderSkyPanorama(renderer) {
+function renderSkyPanorama(renderer, cloudScale = 0.62) {
   const rt = new THREE.WebGLRenderTarget(1024, 256, {
     type: THREE.HalfFloatType,
     wrapS: THREE.RepeatWrapping,
@@ -262,8 +298,10 @@ function renderSkyPanorama(renderer) {
     generateMipmaps: true,
     depthBuffer: false,
   });
+  // thinner clouds than the visible sky: blurred by the wave slopes, the low
+  // sun-lit cloud band would otherwise turn the whole sea silver-grey
   const mat = new THREE.ShaderMaterial({
-    uniforms: { ...atmosphereUniforms },
+    uniforms: { ...atmosphereUniforms, uCloudCover: { value: atmosphereUniforms.uCloudCover.value * cloudScale } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
     fragmentShader: skyPanoFrag,
     depthTest: false,
@@ -357,10 +395,11 @@ export function createOcean({ heightNear, heightFar, waveTexture }) {
     // sun irradiance in scene units (matches the key light: 3.8 x pale gold)
     uSunColor: { value: new THREE.Color(1.0, 0.87, 0.64).multiplyScalar(3.8) },
     uGlint: { value: 0.16 },
-    uDeep: { value: new THREE.Vector3(0.0045, 0.030, 0.092) },
-    uAbsorb: { value: new THREE.Vector3(0.46, 0.085, 0.052) },
+    uDeep: { value: new THREE.Vector3(0.0032, 0.022, 0.086) },
+    uAbsorb: { value: new THREE.Vector3(0.5, 0.115, 0.07) },
     uAmbient: { value: new THREE.Vector3(1.55, 1.75, 2.15) },
     uWindDir: { value: wind },
+    uDebug: { value: 0 },
   };
   const mat = new THREE.ShaderMaterial({
     name: 'Ocean',

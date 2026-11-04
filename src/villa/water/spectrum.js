@@ -120,12 +120,12 @@ function tail({ beta = 0.006, dir = 0, kOn = 0.6, kCut = 600 }) {
   };
 }
 
-export function seaSpectrum({ U = 4.6, windDir = -1.32, swellDir = -1.38 } = {}) {
-  // wind sea (light onshore breeze), a long low swell from the south-south-west
-  const wind = jonswap({ U, fetch: 80000, dir: windDir });
-  const swell = jonswap({ U: 9, fetch: 400000, gamma: 6, dir: swellDir, spread: 5, scale: 0.035, peakOmega: 0.72 });
-  const cap = tail({ beta: 0.0045, dir: windDir, kOn: 1.2 });
-  return (k, th) => wind(k, th) + swell(k, th) + cap(k, th);
+export function seaSpectrum({ U = 3.4, fetch = 40000, windDir = -1.32, swellDir = -1.38, swell = 0.03, calm = 0.7, kc = 2 * Math.PI / 0.04 } = {}) {
+  // calm evening sea: light onshore breeze (short waves damped, rolled off
+  // below a few cm) and a long, low swell from the south-south-west
+  const wind = jonswap({ U, fetch, dir: windDir, scale: calm });
+  const sw = jonswap({ U: 9, fetch: 400000, gamma: 6, dir: swellDir, spread: 5, scale: swell, peakOmega: 0.72 });
+  return (k, th) => (wind(k, th) + sw(k, th)) * Math.exp(-((k / kc) ** 2));
 }
 
 export function poolSpectrum() {

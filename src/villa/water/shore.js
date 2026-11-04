@@ -129,25 +129,29 @@ export function buildShoreField(heightTex, { swellFrom = [-0.2, -1] } = {}) {
     const ux = swellFrom[0] / sw, uy = swellFrom[1] / sw;
     return [ux * c - uy * s, ux * s + uy * c];
   });
+  // computed on a 2x coarser grid (it only follows the large coastline shape)
   const exposure = new Float32Array(W * H);
-  const reach = 160; // metres
-  const step = Math.max(sx, sy);
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
+  const reach = 140; // metres
+  const step = Math.max(2 * Math.max(sx, sy), 1.8);
+  for (let y = 0; y < H; y += 2) {
+    for (let x = 0; x < W; x += 2) {
       const i = y * W + x;
-      if (sdf[i] > 90 || sdf[i] < -12) { exposure[i] = sdf[i] > 0 ? 1 : 0; continue; }
-      let open = 0;
-      for (const [dx, dy] of dirs) {
-        let free = reach;
-        for (let t = step * 1.5 + Math.max(0, sdf[i]) * 0; t < reach; t += step) {
-          const px = x + (dx * t) / sx, py = y + (dy * t) / sy;
-          const ix = Math.round(px), iy = Math.round(py);
-          if (ix < 0 || iy < 0 || ix >= W || iy >= H) break;
-          if (h[iy * W + ix] > 0.4 && t > 2 * step) { free = t; break; }
+      let e;
+      if (sdf[i] > 70 || sdf[i] < -12) e = sdf[i] > 0 ? 1 : 0;
+      else {
+        let open = 0;
+        for (const [dx, dy] of dirs) {
+          let free = reach;
+          for (let t = 2 * step; t < reach; t += step) {
+            const ix = Math.round(x + (dx * t) / sx), iy = Math.round(y + (dy * t) / sy);
+            if (ix < 0 || iy < 0 || ix >= W || iy >= H) break;
+            if (h[iy * W + ix] > 0.4) { free = t; break; }
+          }
+          open += free / reach;
         }
-        open += free / reach;
+        e = open / dirs.length;
       }
-      exposure[i] = open / dirs.length;
+      for (let yy = y; yy < Math.min(H, y + 2); yy++) for (let xx = x; xx < Math.min(W, x + 2); xx++) exposure[yy * W + xx] = e;
     }
   }
   const data = new Uint16Array(W * H * 4);
