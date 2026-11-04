@@ -210,10 +210,10 @@ export function marbleTextures(kind) {
     if (kind === 'nero') {
       const W = 1024, H = 512;
       const veins = veinField(W, H, [
-        { a: 1, b: 2, amp: 1.0, width: 0.003, D: 0.32, seed: 1, fade: 0.25, ridge: 0.35 },
-        { a: 2, b: -1, amp: 0.8, width: 0.0018, D: 0.3, seed: 2, fade: 0.05 },
-        { a: 4, b: 3, amp: 0.45, width: 0.0011, D: 0.26, seed: 3, fade: -0.25 },
-        { a: 6, b: -5, amp: 0.3, width: 0.0008, D: 0.22, seed: 4, fade: -0.4 },
+        { a: 1, b: 2, amp: 1.0, width: 0.003, D: 0.2, seed: 1, fade: 0.25, ridge: 0.3 },
+        { a: 2, b: -1, amp: 0.75, width: 0.0018, D: 0.18, seed: 2, fade: 0.05 },
+        { a: 4, b: 3, amp: 0.4, width: 0.0011, D: 0.16, seed: 3, fade: -0.25 },
+        { a: 6, b: -5, amp: 0.28, width: 0.0008, D: 0.14, seed: 4, fade: -0.4 },
       ], 1.0, 1.0, 400);
       const cloud = noiseTile(512, 4, 410, 5, 0.55);
       const cloud2 = noiseTile(512, 12, 411, 3, 0.5);
