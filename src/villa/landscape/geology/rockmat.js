@@ -131,13 +131,13 @@ GrSurf gr_limestone(vec3 p, vec3 n, float zs, float hard, float ao, float sh, fl
 vec3 gr_soil(vec3 p, float dist, inout float h) {
   float n1 = vh_fbm3(p * 0.9, 3);
   float n2 = vh_fbm3(p * 3.4 + 5.0, 2);
-  vec3 dark = vec3(0.052, 0.047, 0.038);
-  vec3 litter = vec3(0.098, 0.074, 0.050);
-  vec3 grass = vec3(0.165, 0.155, 0.098);
-  vec3 green = vec3(0.055, 0.075, 0.033);
+  vec3 dark = vec3(0.068, 0.060, 0.048);
+  vec3 litter = vec3(0.120, 0.090, 0.060);
+  vec3 grass = vec3(0.205, 0.188, 0.118);
+  vec3 green = vec3(0.068, 0.088, 0.040);
   vec3 c = mix(dark, litter, smoothstep(-0.25, 0.25, n1));
-  c = mix(c, grass, smoothstep(0.1, 0.45, n2 - n1 * 0.3) * 0.6);
-  c = mix(c, green, 0.25 + smoothstep(0.0, 0.5, n1 + n2 * 0.4) * 0.45);
+  c = mix(c, grass, smoothstep(-0.05, 0.4, n2 - n1 * 0.3) * 0.75);
+  c = mix(c, green, 0.18 + smoothstep(0.0, 0.5, n1 + n2 * 0.4) * 0.4);
   float grit = smoothstep(0.55, 0.7, vh_noise3(p * 11.0)) * (1.0 - smoothstep(8.0, 30.0, dist));
   c = mix(c, vec3(0.30, 0.29, 0.27), grit * 0.5);
   h += n2 * 0.02 + grit * 0.01;
