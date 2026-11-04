@@ -34,7 +34,7 @@ geometry is authored in GLB plan coordinates (`src/villa/architecture/plan.js`).
 ## Decisions where references conflict
 
 1. **Sun position.** Manifest: "subtle pale yellow sunset over sea toward southeast". Kept literally
-   (azimuth 146°, elevation 5.5°) even though photos put the sun wherever the camera looks. Result: the
+   (azimuth 146°, elevation 7.5°) even though photos put the sun wherever the camera looks. Result: the
    sun is in frame only for south/south‑east‑facing views (interior hero, exterior hero, workspace).
 2. **Waterfall side.** Several photos show the waterfall at the image centre/right under the pool.
    It is fixed at the west tip per manifest; it never moves between views.

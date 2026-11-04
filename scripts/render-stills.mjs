@@ -86,8 +86,8 @@ try {
       results.push({ view: views[i], file, secs });
       console.log(`${views[i]}: ${secs}s`);
     }
-    const errs = logs.filter((l) => /error/i.test(l) && !/Mismatch/.test(l));
-    if (errs.length) console.log(errs.slice(0, 12).join('\n'));
+    const errs = logs.filter((l) => (/error/i.test(l) && !/Mismatch/.test(l)) || /\[villa\]/.test(l));
+    if (errs.length) console.log(errs.slice(0, 20).join('\n'));
     await page.close();
   }
   for (const view of session ? [] : views) {
