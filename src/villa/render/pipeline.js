@@ -33,6 +33,8 @@ uniform vec3 uGain;
 uniform float uVignette;
 uniform vec2 uResolution;
 uniform float uTonemap;
+uniform float uGrain;
+uniform float uCA;
 varying vec2 vUv;
 
 // ACES fitted (Stephen Hill)
@@ -92,7 +94,9 @@ vec3 toSRGB(vec3 c) {
 float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
 
 void main() {
-  vec3 c = texture2D(tColor, vUv).rgb * uExposure;
+  // faint lateral chromatic aberration toward the frame edges (real lens)
+  vec2 dc = (vUv - 0.5) * uCA;
+  vec3 c = vec3(texture2D(tColor, vUv + dc).r, texture2D(tColor, vUv).g, texture2D(tColor, vUv - dc).b) * uExposure;
   c = uTonemap > 0.5 ? agx(c) : acesFitted(c);
   // grade in display-linear
   float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -107,6 +111,9 @@ void main() {
   q.x *= uResolution.x / uResolution.y;
   float v = 1.0 - uVignette * smoothstep(0.35, 1.05, length(q));
   s *= v;
+  // fine luminance grain (sensor noise), stronger in the shadows
+  float g = hash(vUv * uResolution + 17.0) + hash(vUv * uResolution * 1.37 + 3.1) - 1.0;
+  s += g * uGrain * (1.15 - dot(s, vec3(0.3333)));
   s += (hash(vUv * uResolution) - 0.5) / 255.0;
   gl_FragColor = vec4(s, 1.0);
 }
@@ -189,6 +196,8 @@ export class Pipeline {
         uVignette: { value: 0.15 },
         uResolution: { value: new THREE.Vector2(1, 1) },
         uTonemap: { value: 1 },
+        uGrain: { value: 0.012 },
+        uCA: { value: 0.0016 },
       },
       vertexShader: quadVert,
       fragmentShader: finalFrag,

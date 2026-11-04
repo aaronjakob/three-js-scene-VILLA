@@ -22,6 +22,7 @@ export class ReflectionPlane {
       tReflection: { value: this.rt.texture },
       uReflMatrix: { value: this.textureMatrix },
       uReflRes: { value: new THREE.Vector2(2, 2) },
+      uReflOn: { value: 1 },
     };
     this.hidden = [];
   }
@@ -43,13 +44,14 @@ export class ReflectionPlane {
         if (prev) prev(sh, r);
         sh.uniforms.tReflection = self.uniforms.tReflection;
         sh.uniforms.uReflMatrix = self.uniforms.uReflMatrix;
+        sh.uniforms.uReflOn = self.uniforms.uReflOn;
         sh.uniforms.uReflStrength = { value: strength };
         sh.uniforms.uReflRough = { value: roughness };
         sh.vertexShader = sh.vertexShader
           .replace('#include <common>', '#include <common>\nuniform mat4 uReflMatrix;\nvarying vec4 vReflCoord;\nvarying vec3 vReflW;')
           .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvec4 rw = modelMatrix * vec4(transformed, 1.0);\nvReflW = rw.xyz;\nvReflCoord = uReflMatrix * rw;');
         sh.fragmentShader = sh.fragmentShader
-          .replace('#include <common>', '#include <common>\nuniform sampler2D tReflection;\nuniform float uReflStrength;\nuniform float uReflRough;\nvarying vec4 vReflCoord;\nvarying vec3 vReflW;')
+          .replace('#include <common>', '#include <common>\nuniform sampler2D tReflection;\nuniform float uReflStrength;\nuniform float uReflRough;\nuniform float uReflOn;\nvarying vec4 vReflCoord;\nvarying vec3 vReflW;')
           .replace('#include <opaque_fragment>', `
 {
   vec3 V = normalize(cameraPosition - vReflW);
@@ -60,7 +62,7 @@ export class ReflectionPlane {
   vec4 rc = textureLod(tReflection, ruv, lod);
   rc.rgb = min(rc.rgb, vec3(2.2)); // no blown sun disc in the floor
   vec3 wN = inverseTransformDirection(normal, viewMatrix);
-  float k = uReflStrength * mix(0.25, 1.0, F) * rc.a * smoothstep(0.9, 0.99, wN.y);
+  float k = uReflOn * uReflStrength * mix(0.25, 1.0, F) * rc.a * smoothstep(0.9, 0.99, wN.y);
   outgoingLight = mix(outgoingLight, outgoingLight * 0.55 + rc.rgb, k * 0.85);
 }
 #include <opaque_fragment>`);

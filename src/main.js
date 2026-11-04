@@ -28,6 +28,7 @@ const opts = {
   overrides: params.get('ov') ? Object.fromEntries(params.get('ov').split(',').map((kv) => { const [k, v] = kv.split(':'); return [k, isNaN(+v) ? v : +v]; })) : undefined,
   camera: params.get('cam') ? params.get('cam').split(',').map(Number) : undefined,
   preserveDrawingBuffer: still,
+  manualRender: still,
   onViewChange: (id) => {
     for (const b of nav.querySelectorAll('button')) b.setAttribute('aria-current', String(b.dataset.view === id));
     try { localStorage.setItem('villa:view', id); } catch {}

@@ -18,6 +18,9 @@ export const atmosphereUniforms = {
   uHazeColor: { value: new THREE.Color(0.56, 0.68, 0.84) },
   uSunHazeColor: { value: new THREE.Color(0.95, 0.86, 0.70) },
   uCloudCover: { value: 0.46 },
+  // captured interior light probe (PMREM, same size as scene.environment)
+  uEnvInterior: { value: null },
+  uHasEnvInterior: { value: 0 },
 };
 
 export const GLSL_SKY = /* glsl */ `
@@ -141,6 +144,10 @@ vec3 vh_applyHaze(vec3 col, vec3 worldPos, vec3 camPos) {
   } else {
     fogInt = uHazeDensity * exp(-h0 * k) * dist;
   }
+  // extra aerial perspective that only builds up beyond ~700 m: layered ridges
+  float far = max(dist - 700.0, 0.0);
+  float hk = exp(-max(worldPos.y, 0.0) / 900.0);
+  fogInt += far * 0.000085 * hk;
   float f = 1.0 - exp(-max(fogInt, 0.0));
   float mu = max(dot(rd, uSunDirHaze), 0.0);
   vec3 hc = mix(uHazeColor, uSunHazeColor, pow(mu, 8.0) * 0.75);
@@ -252,6 +259,8 @@ export function installHaze() {
   THREE.ShaderChunk.fog_pars_fragment = /* glsl */ `
 #ifdef USE_FOG
   varying vec3 vHazeWorldPos;
+  uniform sampler2D uEnvInterior;
+  uniform float uHasEnvInterior;
   ${GLSL_HAZE}
 #endif
 `;
@@ -262,14 +271,36 @@ export function installHaze() {
 #ifdef USE_FOG
 {
   float ik = vh_interiorK(vHazeWorldPos);
-  #if defined( RE_IndirectDiffuse )
-    iblIrradiance *= ik;
-    irradiance *= mix(1.0, ik, 0.7);
-    iblIrradiance += vec3(1.0, 0.78, 0.58) * (1.0 - ik) * 0.10;
+  #if defined( USE_ENVMAP ) && defined( ENVMAP_TYPE_CUBE_UV ) && defined( STANDARD )
+  if (uHasEnvInterior > 0.5) {
+    // inside the glazed envelopes: light from the captured interior probe
+    float wI = 1.0 - smoothstep(0.86, 1.0, ik);
+    float depthK = mix(0.62, 1.0, smoothstep(0.3, 1.0, ik)); // farther from glass = dimmer
+    #if defined( RE_IndirectDiffuse )
+      vec3 wN = inverseTransformDirection( geometryNormal, viewMatrix );
+      vec3 irrI = PI * textureCubeUV( uEnvInterior, envMapRotation * wN, 1.0 ).rgb * envMapIntensity * depthK;
+      iblIrradiance = mix( iblIrradiance, irrI, wI );
+      irradiance *= mix(1.0, 0.6, wI);
+    #endif
+    #if defined( RE_IndirectSpecular )
+      vec3 rv = reflect( -geometryViewDir, geometryNormal );
+      rv = normalize( mix( rv, geometryNormal, material.roughness * material.roughness ) );
+      rv = inverseTransformDirection( rv, viewMatrix );
+      vec3 radI = textureCubeUV( uEnvInterior, envMapRotation * rv, material.roughness ).rgb * envMapIntensity;
+      radiance = mix( radiance, radI, wI );
+    #endif
+  } else
   #endif
-  #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
-    radiance *= ik * ik;
-  #endif
+  {
+    #if defined( RE_IndirectDiffuse )
+      iblIrradiance *= ik;
+      irradiance *= mix(1.0, ik, 0.7);
+      iblIrradiance += vec3(1.0, 0.78, 0.58) * (1.0 - ik) * 0.10;
+    #endif
+    #if defined( USE_ENVMAP ) && defined( RE_IndirectSpecular )
+      radiance *= ik * ik;
+    #endif
+  }
 }
 #endif
 `;
@@ -282,6 +313,8 @@ export function installHaze() {
 
 // Materials need the haze uniforms; attach them through onBeforeCompile.
 export const hazeUniforms = {
+  uEnvInterior: atmosphereUniforms.uEnvInterior,
+  uHasEnvInterior: atmosphereUniforms.uHasEnvInterior,
   uHazeColor: atmosphereUniforms.uHazeColor,
   uSunHazeColor: atmosphereUniforms.uSunHazeColor,
   uHazeDensity: atmosphereUniforms.uHazeDensity,

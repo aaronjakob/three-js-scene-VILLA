@@ -21,6 +21,9 @@ import { buildInterior } from './interior/furniture.js';
 import { buildVegetation } from './landscape/vegetation.js';
 import { ReflectionPlane } from './render/reflection.js';
 import { CameraRig } from './explore/rig.js';
+import { bakeProbes } from './render/probes.js';
+import { addWindowPortals } from './render/portals.js';
+import { materials } from './materials/library.js';
 
 export { VIEWS, PROFILES };
 
@@ -106,7 +109,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
   scene.add(sky);
 
   const sunDir = sunDirection(new THREE.Vector3());
-  const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.85, 0.60), 3.8);
+  const sun = new THREE.DirectionalLight(new THREE.Color(1.0, 0.85, 0.60), 4.4);
   sun.position.copy(sunDir).multiplyScalar(1400).add(new THREE.Vector3(0, 16, 6));
   sun.target.position.set(0, 16, 6);
   sun.castShadow = true;
@@ -116,10 +119,10 @@ async function buildLive(container, options, gpu, q, cleanup) {
   sc.near = 900; sc.far = 4200;
   sun.shadow.bias = 0;
   sun.shadow.normalBias = 0.12; // grazing 9-degree sun: offset along normals, not depth
-  sun.shadow.radius = 2.5;
+  sun.shadow.radius = q.shadowSize >= 8192 ? 4.5 : 2.5;
   scene.add(sun, sun.target);
 
-  const hemi = new THREE.HemisphereLight(new THREE.Color(0.66, 0.68, 0.72), new THREE.Color(0.26, 0.21, 0.14), 0.5);
+  const hemi = new THREE.HemisphereLight(new THREE.Color(0.66, 0.68, 0.72), new THREE.Color(0.26, 0.21, 0.14), 0.4);
   scene.add(hemi);
 
   // --- landscape -----------------------------------------------------------
@@ -157,6 +160,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
   lap('vegetation');
   await yieldToHost();
 
+  if (q.portals) addWindowPortals(scene, { intensity: q.portalIntensity ?? 1.6 });
   attachHazeToScene(scene);
 
   // --- reflections & pipeline ---------------------------------------------
@@ -168,10 +172,27 @@ async function buildLive(container, options, gpu, q, cleanup) {
   }
   const pipeline = new Pipeline(renderer, scene, camera, q);
 
+  // captured light probes: local reflections + bounce light (one-off at start-up)
+  let probes = null;
+  if (q.probes) {
+    probes = bakeProbes({
+      renderer, scene, reflection,
+      poolWater: villa.poolWater,
+      uniforms: atmosphereUniforms,
+      glass: materials(q).glass,
+      exterior: toThree([0, -21, 24.5]),
+      interior: toThree([0.0, -2.2, 19.8]),
+      bounces: q.probeBounces ?? 1,
+      size: 256,
+    });
+    lap('probes');
+  }
+
   // --- loop state -----------------------------------------------------------
   let width = 1, height = 1;
   let needsRender = true;
-  let running = true;
+  // offline stills drive frames explicitly (renderNow); no RAF loop at all
+  let running = !options.manualRender;
   let raf = 0;
   let mode = 'backdrop';
   let lost = false; // WebGL context lost
@@ -216,7 +237,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
     pipeline.setSize(width, height);
     reflection?.setSize(width, height);
     // resizing clears the canvas: redraw even while paused
-    if (!running && !lost) renderFrame(0);
+    if (!running && !lost && !options.manualRender) renderFrame(0);
     invalidate();
   }
 
@@ -334,6 +355,11 @@ async function buildLive(container, options, gpu, q, cleanup) {
     pause() { running = false; cancelAnimationFrame(raf); raf = 0; },
     resume() { running = true; clock.update(); invalidate(); },
     renderNow(dt = 0) { renderFrame(dt); },
+    setFreeCamera(c) {
+      // dev / offline: [x,y,z, tx,ty,tz, fov] in GLB coordinates
+      rig._apply(toThree(c.slice(0, 3)), toThree(c.slice(3, 6)), c[6] ?? 45);
+      rig.currentView = null;
+    },
     capture(type = 'image/png', quality) {
       renderFrame(0);
       return canvas.toDataURL(type, quality);
@@ -386,6 +412,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
         }
       });
       envTex.dispose();
+      probes?.dispose();
       heightNear.dispose();
       heightFar.dispose();
       waveRT.dispose();

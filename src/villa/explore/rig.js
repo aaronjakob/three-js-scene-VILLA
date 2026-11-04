@@ -132,14 +132,27 @@ export class CameraRig {
   }
 
   _apply(pos, target, fov) {
-    this.camera.position.copy(pos);
-    this.camera.up.set(0, 1, 0);
-    this.camera.lookAt(target);
-    if (Math.abs(this.camera.fov - fov) > 1e-3) {
-      this.camera.fov = fov;
-      this.camera.updateProjectionMatrix();
+    const cam = this.camera;
+    cam.position.copy(pos);
+    cam.up.set(0, 1, 0);
+    cam.fov = fov;
+    // Architectural "shift lens": for gently pitched views keep the camera level
+    // (verticals stay vertical) and shift the frame instead of tilting it.
+    const d = tmpV.copy(target).sub(pos);
+    const horiz = Math.hypot(d.x, d.z);
+    const pitch = Math.atan2(d.y, horiz);
+    const shiftable = !this.explore && Math.abs(pitch) < THREE.MathUtils.degToRad(13) && horiz > 1e-3;
+    if (shiftable) {
+      cam.lookAt(pos.x + d.x, pos.y, pos.z + d.z);
+      const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
+      const shift = -(Math.tan(pitch) / tanHalf) * 0.5; // fraction of frame height
+      cam.setViewOffset(1, 1, 0, shift, 1, 1);
+    } else {
+      cam.lookAt(target);
+      if (cam.view?.enabled) cam.clearViewOffset();
     }
-    this.camera.updateMatrixWorld();
+    cam.updateProjectionMatrix();
+    cam.updateMatrixWorld();
   }
 
   setExplore(on) {
@@ -169,6 +182,7 @@ export class CameraRig {
         this.yaw = best.yaw;
       }
       this.camera.fov = 62;
+      if (this.camera.view?.enabled) this.camera.clearViewOffset();
       this.camera.updateProjectionMatrix();
       this._applyLook();
       c.tabIndex = 0;

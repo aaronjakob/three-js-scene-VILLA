@@ -85,22 +85,8 @@ export function travertine(kind = 'floor') {
     rough[y * size + x] = clamp255(205 + isPore * 50 + cloud * 12);
     return [clamp255(base[0] * l + warm), clamp255(base[1] * l + warm * 0.6), clamp255(base[2] * l - warm * 0.3)];
   });
-  // tile joints (large format 1.2 x 0.6 m when repeat is ~1 per 2.4 m)
-  if (kind === 'floor') {
-    const ctx = canvas.getContext('2d');
-    ctx.strokeStyle = 'rgba(120,105,85,0.35)';
-    ctx.lineWidth = 1.2;
-    for (let i = 0; i <= 2; i++) {
-      ctx.beginPath(); ctx.moveTo(0, i * size / 2); ctx.lineTo(size, i * size / 2); ctx.stroke();
-    }
-    for (let j = 0; j < 2; j++) {
-      for (let i = 0; i <= 2; i++) {
-        const off = j % 2 ? size / 4 : 0;
-        ctx.beginPath(); ctx.moveTo((i * size / 2 + off) % size, j * size / 2); ctx.lineTo((i * size / 2 + off) % size, (j + 1) * size / 2); ctx.stroke();
-      }
-    }
-    tex.needsUpdate = true;
-  }
+  // joints are drawn procedurally per tile in the material (see stone.js)
+  void canvas;
   const rc = makeCanvas(size);
   const rctx = rc.getContext('2d');
   const rimg = rctx.createImageData(size, size);
@@ -123,7 +109,7 @@ export function slabStone() {
   const s = new Simplex(21);
   const { tex } = pixelTexture(size, (x, y) => {
     const u = x / size, v = y / size;
-    const n = tileNoise(s, u, v, 4, 4, 5, 0, 0) * 0.05 + tileNoise(s, u, v, 16, 16, 3, 0, 0) * 0.025;
+    const n = tileNoise(s, u, v, 4, 4, 5, 0, 0) * 0.07 + tileNoise(s, u, v, 16, 16, 3, 0, 0) * 0.03 + tileNoise(s, u, v, 48, 48, 2, 5, 9) * 0.015;
     const streak = tileNoise(s, u, v, 2, 30, 3, 0, 0) * 0.02;
     const l = 1 + n + streak;
     return [clamp255(236 * l), clamp255(231 * l), clamp255(222 * l)];

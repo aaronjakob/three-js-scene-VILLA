@@ -46,12 +46,51 @@ if (!base) {
   }
 }
 
+// --session: build the scene once and render every view from the same page
+// (one build, one shadow map / probe capture; identical world for all views)
+const session = args.session === 'true';
+const fileFor = (vname, cam) => path.join(out, `${cam ? vname + '_' + cam.replace(/[^0-9a-z-]+/gi, '_') : vname}.png`);
+
 const browser = await playwright.chromium.launch({
   args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'],
 });
 const results = [];
 try {
-  for (const view of views) {
+  if (session) {
+    const page = await browser.newPage({ viewport: { width: W, height: H } });
+    const logs = [];
+    page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
+    page.on('pageerror', (e) => logs.push(`[pageerror] ${e.message}`));
+    const t0 = Date.now();
+    const [v0, c0] = views[0].split('@');
+    await page.goto(`${base}?still&view=${v0}&w=${W}&h=${H}&quality=${quality}${c0 ? '&cam=' + c0 : ''}${extra ? '&' + extra : ''}`);
+    await page.waitForFunction(() => window.__villaReady === true || !!window.__villaError, null, { timeout: 1800000, polling: 1000 });
+    const err = await page.evaluate(() => window.__villaError);
+    if (err) throw new Error(`page error: ${err}\n${logs.slice(-20).join('\n')}`);
+    console.log(`build+first frame: ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+    for (let i = 0; i < views.length; i++) {
+      const [vname, cam] = views[i].split('@');
+      const t1 = Date.now();
+      const data = await page.evaluate(({ vname, cam, first }) => {
+        const V = window.__villa;
+        if (!first) {
+          if (cam) V.setFreeCamera(cam.split(',').map(Number));
+          else V.setView(vname, { instant: true });
+          V.renderNow(0);
+        }
+        return document.querySelector('canvas').toDataURL('image/png');
+      }, { vname, cam, first: i === 0 });
+      const file = fileFor(vname, cam);
+      await writeFile(file, Buffer.from(data.split(',')[1], 'base64'));
+      const secs = ((Date.now() - (i === 0 ? t0 : t1)) / 1000).toFixed(1);
+      results.push({ view: views[i], file, secs });
+      console.log(`${views[i]}: ${secs}s`);
+    }
+    const errs = logs.filter((l) => /error/i.test(l) && !/Mismatch/.test(l));
+    if (errs.length) console.log(errs.slice(0, 12).join('\n'));
+    await page.close();
+  }
+  for (const view of session ? [] : views) {
     const page = await browser.newPage({ viewport: { width: W, height: H } });
     const logs = [];
     page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
@@ -75,7 +114,7 @@ try {
     });
     const stats = await page.evaluate(() => window.__villa.stats());
     const buf = Buffer.from(data.split(',')[1], 'base64');
-    const file = path.join(out, `${cam ? vname + '_' + cam.replace(/[^0-9a-z-]+/gi, '_') : vname}.png`);
+    const file = fileFor(vname, cam);
     await writeFile(file, buf);
     const secs = ((Date.now() - t0) / 1000).toFixed(1);
     results.push({ view, file, secs, stats });

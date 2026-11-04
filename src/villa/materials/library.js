@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import * as T from './textures.js';
 import { createGlassMaterial } from './glass.js';
+import { tileStone } from './stone.js';
 
 // Shared PBR materials (physically plausible roughness / albedo).
 // Textures are world-scaled through repeat; ExtrudeGeometry produces UVs in
@@ -215,6 +216,11 @@ export function materials(quality) {
   lib.deckLow.name = 'travertine-honed-low';
   lib.floorPlain = lib.floorPolished.clone();
   lib.floorPlain.name = 'travertine-polished-plain';
+  // natural stone tiling (per-tile variation + crisp joints)
+  tileStone(lib.floorPolished, { key: 'floorTiles' });
+  tileStone(lib.floorPlain, { key: 'floorTiles' });
+  tileStone(lib.deck, { tileW: 1.2, tileH: 0.6, joint: 0.003, depth: 0.35, key: 'deckTiles' });
+  tileStone(lib.deckLow, { tileW: 0.9, tileH: 0.45, joint: 0.003, depth: 0.35, key: 'deckTilesLow' });
   lib.stoneWall.side = THREE.DoubleSide;
   return lib;
 }
