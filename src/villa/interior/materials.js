@@ -152,9 +152,9 @@ export function interiorMaterials() {
     // light sources (unlit / emissive)
     shade: new THREE.MeshStandardMaterial({
       name: 'linen-shade', color: srgb(236, 226, 206), roughness: 0.9, side: THREE.DoubleSide,
-      emissive: col(1.0, 0.66, 0.38), emissiveIntensity: 1.25, emissiveMap: TX.shadeTexture(),
+      emissive: col(1.0, 0.64, 0.36), emissiveIntensity: 0.75, emissiveMap: TX.shadeTexture(),
     }),
-    opal: new THREE.MeshStandardMaterial({ name: 'opal-globe', color: 0xffffff, roughness: 0.35, emissive: col(1.0, 0.7, 0.42), emissiveIntensity: 1.6 }),
+    opal: new THREE.MeshStandardMaterial({ name: 'opal-globe', color: 0xffffff, roughness: 0.35, emissive: col(1.0, 0.68, 0.4), emissiveIntensity: 1.1 }),
     ledStrip: new THREE.MeshBasicMaterial({ name: 'led-strip-2700k', color: col(1.0, 0.66, 0.36).multiplyScalar(2.2) }),
     bulb: new THREE.MeshBasicMaterial({ name: 'bulb', color: col(1.0, 0.74, 0.46).multiplyScalar(3.0) }),
     candle: new THREE.MeshBasicMaterial({ name: 'candle-flame', color: col(1.0, 0.62, 0.28).multiplyScalar(4.0) }),
@@ -184,7 +184,7 @@ export function interiorMaterials() {
     return m;
   };
   lib.rugLiving = rugMat('rug-living', 'living', 5.6, 4.2);
-  lib.rugBed = rugMat('rug-bedroom', 'bedroom', 3.4, 2.6);
+  lib.rugBed = rugMat('rug-bedroom', 'living', 3.4, 2.6);
   lib.rugDining = rugMat('rug-dining', 'living', 4.2, 4.2);
 
   // paintings

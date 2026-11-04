@@ -22,23 +22,26 @@ export function at(g, x, y, z) { g.translate(x, y, z); return g; }
 // Average normals across coincident vertices (keeps UV seams, hides shading seams)
 export function weldNormals(g, eps = 1e-4) {
   g.computeVertexNormals();
-  const pos = g.attributes.position, nrm = g.attributes.normal;
+  const P = g.attributes.position.array, N = g.attributes.normal.array;
+  const n = P.length / 3;
   const map = new Map();
   const inv = 1 / eps;
-  const keys = new Array(pos.count);
-  for (let i = 0; i < pos.count; i++) {
-    const k = `${Math.round(pos.getX(i) * inv)},${Math.round(pos.getY(i) * inv)},${Math.round(pos.getZ(i) * inv)}`;
-    keys[i] = k;
-    let a = map.get(k);
-    if (!a) { a = [0, 0, 0]; map.set(k, a); }
-    a[0] += nrm.getX(i); a[1] += nrm.getY(i); a[2] += nrm.getZ(i);
+  const slot = new Int32Array(n);
+  const acc = [];
+  for (let i = 0; i < n; i++) {
+    // exact integer key (local coordinates stay well inside +-6 m)
+    const k = (Math.round(P[i * 3] * inv) + 65536) * 17179869184 + (Math.round(P[i * 3 + 1] * inv) + 65536) * 131072 + (Math.round(P[i * 3 + 2] * inv) + 65536);
+    let s = map.get(k);
+    if (s === undefined) { s = acc.length / 3; acc.push(0, 0, 0); map.set(k, s); }
+    slot[i] = s;
+    acc[s * 3] += N[i * 3]; acc[s * 3 + 1] += N[i * 3 + 1]; acc[s * 3 + 2] += N[i * 3 + 2];
   }
-  for (let i = 0; i < pos.count; i++) {
-    const a = map.get(keys[i]);
-    const l = Math.hypot(a[0], a[1], a[2]) || 1;
-    nrm.setXYZ(i, a[0] / l, a[1] / l, a[2] / l);
+  for (let i = 0; i < n; i++) {
+    const s = slot[i] * 3;
+    const l = Math.hypot(acc[s], acc[s + 1], acc[s + 2]) || 1;
+    N[i * 3] = acc[s] / l; N[i * 3 + 1] = acc[s + 1] / l; N[i * 3 + 2] = acc[s + 2] / l;
   }
-  nrm.needsUpdate = true;
+  g.attributes.normal.needsUpdate = true;
   return g;
 }
 
@@ -322,6 +325,62 @@ export function sweep(path, profile, o = {}) {
       c.divideScalar(m);
       const ci = pos.length / 3;
       pos.push(c.x, c.y, c.z); uv.push(0, 0);
+      for (let j = 0; j < m; j++) {
+        const a = ring * m + j, b = ring * m + ((j + 1) % m);
+        if (flip) idx.push(ci, b, a); else idx.push(ci, a, b);
+      }
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
+}
+
+// loft through closed cross-sections (arrays of [x, y, z] with equal counts); caps both ends
+export function swapUV(g) {
+  const uv = g.attributes.uv;
+  for (let i = 0; i < uv.count; i++) { const u = uv.getX(i); uv.setXY(i, uv.getY(i), u); }
+  return g;
+}
+export function flipFaces(g) {
+  const idx = g.index.array;
+  for (let i = 0; i < idx.length; i += 3) { const t = idx[i + 1]; idx[i + 1] = idx[i + 2]; idx[i + 2] = t; }
+  g.computeVertexNormals();
+  return g;
+}
+export function loft(sections, { caps = true } = {}) {
+  const n = sections.length, m = sections[0].length;
+  const pos = [], uv = [], idx = [];
+  let dist = 0;
+  for (let i = 0; i < n; i++) {
+    if (i > 0) {
+      const a = sections[i][0], b = sections[i - 1][0];
+      dist += Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+    }
+    let pd = 0;
+    for (let j = 0; j < m; j++) {
+      const p = sections[i][j];
+      if (j > 0) { const q = sections[i][j - 1]; pd += Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]); }
+      pos.push(p[0], p[1], p[2]);
+      uv.push(dist, pd);
+    }
+  }
+  for (let i = 0; i < n - 1; i++) {
+    for (let j = 0; j < m; j++) {
+      const j2 = (j + 1) % m;
+      const a = i * m + j, b = i * m + j2, c = (i + 1) * m + j, d = (i + 1) * m + j2;
+      idx.push(a, c, b, b, c, d);
+    }
+  }
+  if (caps) {
+    for (const [ring, flip] of [[0, true], [n - 1, false]]) {
+      let cx = 0, cy = 0, cz = 0;
+      for (const p of sections[ring]) { cx += p[0]; cy += p[1]; cz += p[2]; }
+      const ci = pos.length / 3;
+      pos.push(cx / m, cy / m, cz / m); uv.push(0, 0);
       for (let j = 0; j < m; j++) {
         const a = ring * m + j, b = ring * m + ((j + 1) % m);
         if (flip) idx.push(ci, b, a); else idx.push(ci, a, b);

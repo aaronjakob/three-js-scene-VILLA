@@ -19,7 +19,13 @@ export function bakeable(material) {
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBake = bake;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vBake;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (1.0 - metalnessFactor) * vBake;');
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\ntotalEmissiveRadiance += diffuseColor.rgb * (1.0 - metalnessFactor) * vBake;')
+      // indoors the clearcoat IBL must fade like the base layer (sky is not
+      // occluded by walls in a forward renderer)
+      .replace('#include <lights_fragment_maps>', `#include <lights_fragment_maps>
+#if defined( USE_CLEARCOAT ) && defined( USE_FOG ) && defined( RE_IndirectSpecular )
+  { float ikc = vh_interiorK(vHazeWorldPos); clearcoatRadiance *= ikc * ikc; }
+#endif`);
   };
   const prevKey = material.customProgramCacheKey;
   material.customProgramCacheKey = () => (prevKey ? prevKey.call(material) : '') + '|bake';

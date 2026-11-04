@@ -169,24 +169,36 @@ export function walnutTextures() {
 // phase = 2pi (a u + b v) + warp, with integer (a, b) so the tile repeats.
 function veinField(W, H, sets, warpA, warpB, seedBase) {
   const out = new Float32Array(W * H);
-  const S = 512;
+  const S = 256, mask = S - 1;
+  const bil = (t, x, y) => {
+    const ix = x | 0, iy = y | 0, tx = x - ix, ty = y - iy;
+    const x0 = ix & mask, x1 = (ix + 1) & mask, y0 = (iy & mask) * S, y1 = ((iy + 1) & mask) * S;
+    const a = t[y0 + x0], b = t[y0 + x1], c = t[y1 + x0], d = t[y1 + x1];
+    return a + (b - a) * tx + (c - a) * ty + (a - b - c + d) * tx * ty;
+  };
   for (let s = 0; s < sets.length; s++) {
-    const { a, b, amp, width, w, seed, fade = 0.5, ridge = 0 } = sets[s];
+    const { a, b, amp, width, D = 0.25, seed, fade = 0.5, ridge = 0 } = sets[s];
     const wa = noiseTile(S, 3, seedBase + seed, 5, 0.55);
     const wb = noiseTile(S, 2, seedBase + seed + 7, 4, 0.5);
     const fd = noiseTile(S, 3, seedBase + seed + 13, 3, 0.5);
     const freq = Math.hypot(a, b);
+    const k2 = 2 * Math.PI * freq;
+    const iw2 = 1 / (width * width), iw3 = 1 / (width * width * 12.25);
+    const ka = 2 * Math.PI * freq * D * warpA * 2.2, kb = 2 * Math.PI * freq * D * warpB * 0.8;
     for (let y = 0; y < H; y++) {
+      const v = y / H, sy = v * S;
       for (let x = 0; x < W; x++) {
-        const u = x / W, v = y / H;
-        const sx = u * S, sy = v * S;
-        const ph = 2 * Math.PI * (a * u + b * v) + warpA * w * samp(wa, S, sx, sy) * 6 + warpB * samp(wb, S, sx * 2, sy * 2) * 2;
-        const sn = Math.abs(Math.sin(ph));
-        const dist = sn / (2 * Math.PI * freq);
-        let vv = Math.exp(-((dist / width) ** 2));
-        if (ridge) vv = Math.max(vv, Math.exp(-((dist / (width * 3.5)) ** 2)) * ridge);
-        const f = smooth(-fade, 0.6, samp(fd, S, sx, sy));
-        out[y * W + x] = Math.max(out[y * W + x], vv * amp * f);
+        const u = x / W, sx = u * S;
+        const ph = 2 * Math.PI * (a * u + b * v) + ka * bil(wa, sx, sy) + kb * bil(wb, sx * 2, sy * 2);
+        const dist = Math.abs(Math.sin(ph)) / k2;
+        const d2 = dist * dist;
+        let vv = Math.exp(-d2 * iw2);
+        if (ridge) vv = Math.max(vv, Math.exp(-d2 * iw3) * ridge);
+        if (vv < 0.004) continue;
+        const f = smooth(-fade, 0.6, bil(fd, sx, sy));
+        const i = y * W + x;
+        const val = vv * amp * f;
+        if (val > out[i]) out[i] = val;
       }
     }
   }
@@ -196,13 +208,12 @@ function veinField(W, H, sets, warpA, warpB, seedBase) {
 export function marbleTextures(kind) {
   return cached('marble-' + kind, () => {
     if (kind === 'nero') {
-      const W = 2048, H = 1024;
+      const W = 1024, H = 512;
       const veins = veinField(W, H, [
-        { a: 1, b: 2, amp: 1.0, width: 0.0022, w: 1.0, seed: 1, fade: 0.2, ridge: 0.35 },
-        { a: 2, b: -1, amp: 0.85, width: 0.0014, w: 0.9, seed: 2, fade: 0.0 },
-        { a: 5, b: 3, amp: 0.55, width: 0.0008, w: 0.6, seed: 3, fade: -0.1 },
-        { a: 7, b: -5, amp: 0.4, width: 0.0006, w: 0.5, seed: 4, fade: -0.2 },
-        { a: 3, b: 7, amp: 0.3, width: 0.0005, w: 0.7, seed: 5, fade: -0.3 },
+        { a: 1, b: 2, amp: 1.0, width: 0.003, D: 0.32, seed: 1, fade: 0.25, ridge: 0.35 },
+        { a: 2, b: -1, amp: 0.8, width: 0.0018, D: 0.3, seed: 2, fade: 0.05 },
+        { a: 4, b: 3, amp: 0.45, width: 0.0011, D: 0.26, seed: 3, fade: -0.25 },
+        { a: 6, b: -5, amp: 0.3, width: 0.0008, D: 0.22, seed: 4, fade: -0.4 },
       ], 1.0, 1.0, 400);
       const cloud = noiseTile(512, 4, 410, 5, 0.55);
       const cloud2 = noiseTile(512, 12, 411, 3, 0.5);
@@ -222,10 +233,9 @@ export function marbleTextures(kind) {
     // calacatta: warm white, bold grey-taupe veins with soft halos
     const W = 1024, H = 1024;
     const veins = veinField(W, H, [
-      { a: 1, b: 1, amp: 1.0, width: 0.004, w: 1.0, seed: 1, fade: 0.1, ridge: 0.4 },
-      { a: 2, b: -1, amp: 0.7, width: 0.002, w: 0.9, seed: 2, fade: -0.1, ridge: 0.2 },
-      { a: 4, b: 3, amp: 0.45, width: 0.0011, w: 0.6, seed: 3, fade: -0.2 },
-      { a: 6, b: -5, amp: 0.3, width: 0.0008, w: 0.5, seed: 4, fade: -0.3 },
+      { a: 1, b: 1, amp: 1.0, width: 0.0045, D: 0.34, seed: 1, fade: 0.2, ridge: 0.45 },
+      { a: 2, b: -1, amp: 0.75, width: 0.0022, D: 0.3, seed: 2, fade: 0.0, ridge: 0.25 },
+      { a: 4, b: 3, amp: 0.45, width: 0.0012, D: 0.24, seed: 3, fade: -0.25 },
     ], 1.0, 1.0, 500);
     const cloud = noiseTile(512, 3, 510, 5, 0.55);
     const col = fillPixels(W, H, (x, y, d, k) => {
@@ -249,40 +259,24 @@ export function marbleTextures(kind) {
 export function boucleTextures() {
   return cached('boucle', () => {
     const S = 512;
-    const c = canvas(S);
-    const ctx = c.getContext('2d');
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, S, S);
-    const rng = mulberry32(61);
-    ctx.globalCompositeOperation = 'lighter';
-    const blob = (x, y, r, a) => {
-      for (const dx of [-S, 0, S]) for (const dy of [-S, 0, S]) {
-        const px = x + dx, py = y + dy;
-        if (px < -r || px > S + r || py < -r || py > S + r) continue;
-        const gr = ctx.createRadialGradient(px, py, 0, px, py, r);
-        gr.addColorStop(0, `rgba(255,255,255,${a})`);
-        gr.addColorStop(0.6, `rgba(255,255,255,${a * 0.45})`);
-        gr.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.fillStyle = gr;
-        ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2); ctx.fill();
-      }
-    };
-    // clusters first (soft lumps), then loops
-    for (let i = 0; i < 260; i++) blob(rng() * S, rng() * S, 18 + rng() * 26, 0.08);
-    for (let i = 0; i < 7000; i++) blob(rng() * S, rng() * S, 3 + rng() * 5, 0.2 + rng() * 0.25);
-    const img = ctx.getImageData(0, 0, S, S).data;
-    const h = new Float32Array(S * S);
-    for (let i = 0; i < S * S; i++) h[i] = img[i * 4] / 255;
+    const loops = noiseTile(S, 96, 61, 2, 0.45);
+    const loops2 = noiseTile(S, 150, 64, 1, 0.5);
+    const clus = noiseTile(S, 14, 65, 3, 0.5);
     const mott = noiseTile(S, 6, 62, 3, 0.5);
     const fleck = noiseTile(S, 90, 63, 1, 0.5);
+    const h = new Float32Array(S * S);
+    for (let i = 0; i < S * S; i++) {
+      const l1 = 1 - Math.abs(loops[i]) * 2.2, l2 = 1 - Math.abs(loops2[i]) * 2.4;
+      h[i] = Math.max(0, l1) * 0.55 + Math.max(0, l2) * 0.35 + clus[i] * 0.35;
+    }
     const col = fillPixels(S, S, (x, y, d, k) => {
       const i = y * S + x;
-      const hv = Math.min(1, h[i]);
-      let l = 0.8 + hv * 0.24 + mott[i] * 0.04;
+      const hv = Math.min(1, Math.max(0, h[i]));
+      const l = 0.8 + hv * 0.24 + mott[i] * 0.04;
       const f = fleck[i] > 0.62 ? 0.12 : 0;
       d[k] = clamp255(250 * l - f * 40); d[k + 1] = clamp255(248 * l - f * 46); d[k + 2] = clamp255(244 * l - f * 56);
     });
-    return { map: toTex(col), normalMap: normalFromHeight(h, S, S, 3.2) };
+    return { map: toTex(col), normalMap: normalFromHeight(h, S, S, 2.6) };
   });
 }
 
@@ -360,7 +354,7 @@ export function leatherTextures() {
 // single image over the whole rug (no repeat); pile normal tiles separately.
 export function rugTextures(kind = 'living') {
   return cached('rug-' + kind, () => {
-    const W = 2048, H = 1536;
+    const W = 1024, H = 768;
     const rng = mulberry32(kind === 'living' ? 101 : 102);
     const abrash = noiseTile(512, 3, 103, 4, 0.6, 1, 0.3);
     const mott = noiseTile(512, 24, 104, 3, 0.5);

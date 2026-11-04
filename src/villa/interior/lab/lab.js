@@ -143,6 +143,6 @@ scene.traverse((o) => { if (o.isLight) lights++; });
 window.__labStats = {
   villaMs: Math.round(t1 - t0), interiorMs: Math.round(t2 - t1), compileMs: Math.round(t4 - t3), frameMs: Math.round(t5 - t4),
   interiorTris: countTris(interior?.root), interiorTexMB: +(texBytes / 1048576).toFixed(1), textures: seen.size,
-  programs: renderer.info.programs?.length ?? 0, lights,
+  programs: renderer.info.programs?.length ?? 0, lights, timings: interior?.root?.userData?.timings,
 };
 window.__labReady = true;
