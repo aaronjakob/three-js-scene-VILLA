@@ -1,20 +1,24 @@
 import * as THREE from 'three';
 import { mulberry32, Simplex, smoothstep } from '../core/noise.js';
-import { foliageAtlas } from '../materials/textures.js';
 import { materials } from '../materials/library.js';
 import { LEVEL } from '../core/world.js';
-import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
   smooth, offset, pointInPoly, distToPoly, ellipse, resample, ccw,
-  deckOutline, poolOutline, L1_PTS, ROOF_PTS, UPPER_PTS, POOL_PTS, ATRIUM, COURT, DRIVE_PTS, FIREPIT, FIRE_STAIR_PTS,
+  deckOutline, poolOutline, L1_PTS, ROOF_PTS, UPPER_PTS, ATRIUM, COURT, DRIVE_PTS, FIREPIT, FIRE_STAIR_PTS,
 } from '../architecture/plan.js';
 import { polyProject } from './terrain.js';
-import { atmosphereUniforms } from '../render/atmosphere.js';
 import { VIEWS } from '../core/anchors.js';
+import { makeTreeVariant } from './flora/trees.js';
+import { makeShrub, makeCascade, makeAgave, agaveMaterial } from './flora/shrubs.js';
+import { foliageMaterial, barkMaterial } from './flora/material.js';
+import { buildFarForest } from './flora/forest.js';
+import { buildIndoorPlants } from './flora/indoor.js';
 
 // Art-directed planting: no tree may stand in the sightline of an exterior
 // camera between the lens and its subject (shrubs stay).
 const SIGHTLINES = VIEWS.filter((v) => !v.interior).map((v) => ({ a: v.position, b: v.target }));
+const EXT_CAMS = VIEWS.filter((v) => !v.interior).map((v) => v.position);
 function blocksSightline(x, y, z, height = 8, near = 26) {
   for (const { a, b } of SIGHTLINES) {
     // anything tall within `near` metres in front of the lens fills the frame
@@ -36,328 +40,25 @@ function blocksSightline(x, y, z, height = 8, near = 26) {
   return false;
 }
 
-// ---------------------------------------------------------------------------
-// Procedural trees: tapered branch tubes + alpha-tested leaf cards with
-// crown-space normals (soft canopy shading), AO vertex colours and a
-// translucency term for backlit leaves.  Many seeds per species so instances
-// never read as copies; each instance also gets its own scale/rotation/tint.
-// ---------------------------------------------------------------------------
-
-const ATLAS = {
-  broad: [0, 0.5, 0.5, 1.0],
-  olive: [0.5, 0.5, 1.0, 1.0],
-  needle: [0, 0, 0.5, 0.5],
-  ivy: [0.5, 0, 1.0, 0.5],
-};
-
-function taperedTube(points, r0, r1, radial = 7) {
-  const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
-  const segs = Math.max(2, points.length * (radial > 5 ? 3 : 2));
-  const frames = curve.computeFrenetFrames(segs, false);
-  const pos = [], nrm = [], uv = [], idx = [];
-  for (let i = 0; i <= segs; i++) {
-    const t = i / segs;
-    const p = curve.getPointAt(t);
-    const N = frames.normals[i], Bn = frames.binormals[i];
-    const r = THREE.MathUtils.lerp(r0, r1, Math.pow(t, 0.8));
-    for (let j = 0; j <= radial; j++) {
-      const a = (j / radial) * Math.PI * 2;
-      const c = Math.cos(a), s = Math.sin(a);
-      const nx = c * N.x + s * Bn.x, ny = c * N.y + s * Bn.y, nz = c * N.z + s * Bn.z;
-      // bark lumps
-      const lump = 1 + 0.08 * Math.sin(a * 3 + t * 9) * (r0 > 0.12 ? 1 : 0.3);
-      pos.push(p.x + nx * r * lump, p.y + ny * r * lump, p.z + nz * r * lump);
-      nrm.push(nx, ny, nz);
-      uv.push(j / radial, t * curve.getLength() * 0.6);
-    }
-  }
-  for (let i = 0; i < segs; i++) {
-    for (let j = 0; j < radial; j++) {
-      const a = i * (radial + 1) + j, b = a + radial + 1;
-      idx.push(a, b, a + 1, a + 1, b, b + 1);
-    }
-  }
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-  g.setIndex(idx);
-  return g;
-}
-
-// one leaf card (quad) at p, facing roughly `face`, size s, atlas cell
-function pushCard(arr, p, face, s, cell, rng, crownC, crownR, aspect = 1) {
-  const up = Math.abs(face.y) > 0.95 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const tx = new THREE.Vector3().crossVectors(up, face).normalize();
-  const ty = new THREE.Vector3().crossVectors(face, tx).normalize();
-  const rot = rng() * Math.PI * 2;
-  const c = Math.cos(rot), sn = Math.sin(rot);
-  const ax = tx.clone().multiplyScalar(c).addScaledVector(ty, sn).multiplyScalar(s * 0.5 * aspect);
-  const ay = ty.clone().multiplyScalar(c).addScaledVector(tx, -sn).multiplyScalar(s * 0.5);
-  const corners = [
-    p.clone().sub(ax).sub(ay), p.clone().add(ax).sub(ay),
-    p.clone().add(ax).add(ay), p.clone().sub(ax).add(ay),
-  ];
-  const [u0, v0, u1, v1] = cell;
-  const uvs = [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
-  // crown-space normal (outward) blended with card normal
-  const out = p.clone().sub(crownC);
-  const dist = out.length() / crownR;
-  out.normalize();
-  const n = out.multiplyScalar(0.75).addScaledVector(face, 0.25).normalize();
-  // ambient occlusion: darker toward the crown core and underside
-  const ao = THREE.MathUtils.clamp(0.35 + 0.65 * Math.min(1, dist) * (0.75 + 0.25 * Math.max(0, out.y + 0.3)), 0.25, 1);
-  const base = arr.pos.length / 3;
-  for (let k = 0; k < 4; k++) {
-    arr.pos.push(corners[k].x, corners[k].y, corners[k].z);
-    arr.nrm.push(n.x, n.y, n.z);
-    arr.uv.push(uvs[k][0], uvs[k][1]);
-    arr.col.push(ao, ao, ao);
-  }
-  arr.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
-}
-
-function leafGeometry(arr) {
-  const g = new THREE.BufferGeometry();
-  g.setAttribute('position', new THREE.Float32BufferAttribute(arr.pos, 3));
-  g.setAttribute('normal', new THREE.Float32BufferAttribute(arr.nrm, 3));
-  g.setAttribute('uv', new THREE.Float32BufferAttribute(arr.uv, 2));
-  g.setAttribute('color', new THREE.Float32BufferAttribute(arr.col, 3));
-  g.setIndex(arr.idx);
-  g.computeBoundingSphere();
-  return g;
-}
-
-const SPECIES = {
-  pine: { height: [7, 11.5], trunkR: [0.18, 0.28], crown: 'umbrella', cell: ATLAS.needle, card: [1.0, 1.4], density: 46 },
-  oak: { height: [4.2, 6.8], trunkR: [0.15, 0.24], crown: 'round', cell: ATLAS.broad, card: [0.85, 1.15], density: 62 },
-  olive: { height: [3.4, 5.0], trunkR: [0.17, 0.26], crown: 'open', cell: ATLAS.olive, card: [0.8, 1.1], density: 85 },
-  cypress: { height: [8, 11], trunkR: [0.12, 0.18], crown: 'column', cell: ATLAS.needle, card: [0.75, 1.0], density: 70 },
-};
-
-export function makeTree(species, seed, lod = 0) {
-  const sp = SPECIES[species];
-  const rng = mulberry32(seed * 7919 + 13);
-  const cardK = lod ? 0.32 : 1;
-  const sizeK = lod ? 1.6 : 1;
-  const H = THREE.MathUtils.lerp(sp.height[0], sp.height[1], rng());
-  const R0 = THREE.MathUtils.lerp(sp.trunkR[0], sp.trunkR[1], rng());
-  const wood = [];
-  const leaves = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-  const tips = [];
-
-  // trunk path with lean and bends
-  const lean = new THREE.Vector3((rng() - 0.5) * 0.5, 1, (rng() - 0.5) * 0.5).normalize();
-  const trunkPts = [new THREE.Vector3(0, -0.4, 0)];
-  const trunkH = species === 'pine' ? H * 0.72 : species === 'cypress' ? H * 0.9 : H * 0.42;
-  const nT = 6;
-  for (let i = 1; i <= nT; i++) {
-    const t = i / nT;
-    const p = lean.clone().multiplyScalar(trunkH * t);
-    p.x += Math.sin(t * 5 + seed) * 0.35 * t * (species === 'olive' ? 2.0 : 1);
-    p.z += Math.cos(t * 4 + seed * 2) * 0.35 * t * (species === 'olive' ? 2.0 : 1);
-    trunkPts.push(p);
-  }
-  wood.push(taperedTube(trunkPts, R0, R0 * (species === 'pine' ? 0.45 : 0.6), lod ? 5 : species === 'olive' ? 9 : 7));
-  const top = trunkPts[trunkPts.length - 1];
-
-  // branches
-  const crownC = new THREE.Vector3();
-  let crownR = 2;
-  if (species === 'pine') {
-    // umbrella: 4-7 limbs splaying up/out from the top third
-    const nb = 4 + Math.floor(rng() * 4);
-    crownC.copy(top).add(new THREE.Vector3(0, H * 0.15, 0));
-    crownR = H * 0.32;
-    for (let b = 0; b < nb; b++) {
-      const a = (b / nb) * Math.PI * 2 + rng() * 0.8;
-      const startT = 0.55 + rng() * 0.4;
-      const start = trunkPts[Math.floor(startT * nT)].clone();
-      const len = H * (0.17 + rng() * 0.13);
-      const dir = new THREE.Vector3(Math.cos(a), 0.55 + rng() * 0.4, Math.sin(a)).normalize();
-      const mid = start.clone().addScaledVector(dir, len * 0.55).add(new THREE.Vector3(0, len * 0.1, 0));
-      const end = start.clone().addScaledVector(dir, len);
-      end.y = Math.max(end.y, top.y + H * 0.05 + rng() * H * 0.12);
-      wood.push(taperedTube([start, mid, end], R0 * 0.42, R0 * 0.12, lod ? 3 : 5));
-      tips.push(end);
-      // secondary twigs
-      for (let k = 0; k < 3; k++) {
-        const t2 = 0.45 + rng() * 0.5;
-        const s2 = start.clone().lerp(end, t2);
-        const d2 = new THREE.Vector3(Math.cos(a + (rng() - 0.5) * 2), 0.4 + rng() * 0.4, Math.sin(a + (rng() - 0.5) * 2)).normalize();
-        const e2 = s2.clone().addScaledVector(d2, len * 0.35);
-        if (!lod) wood.push(taperedTube([s2, e2], R0 * 0.12, R0 * 0.04, 3));
-        tips.push(e2);
-      }
-    }
-    // needle tufts: flattened clusters at tips (umbrella canopy)
-    for (const tip of tips) {
-      const n = Math.round(sp.density * cardK * (0.7 + rng() * 0.6));
-      const rad = H * (0.075 + rng() * 0.04);
-      for (let i = 0; i < n; i++) {
-        const u = rng() * Math.PI * 2, r = Math.sqrt(rng()) * rad;
-        const p = tip.clone().add(new THREE.Vector3(Math.cos(u) * r, (rng() - 0.35) * rad * 0.45, Math.sin(u) * r));
-        const face = new THREE.Vector3((rng() - 0.5) * 0.8, 1, (rng() - 0.5) * 0.8).normalize();
-        pushCard(leaves, p, face, sizeK * THREE.MathUtils.lerp(sp.card[0], sp.card[1], rng()), sp.cell, rng, crownC, crownR);
-      }
-    }
-  } else if (species === 'cypress') {
-    crownC.copy(top).multiplyScalar(0.55);
-    crownR = H * 0.5;
-    const n = Math.round(260 * cardK);
-    for (let i = 0; i < n; i++) {
-      const t = 0.12 + rng() * 0.9;
-      const y = t * H;
-      const rad = (0.15 + Math.sin(Math.min(1, t * 1.1) * Math.PI) * 0.85) * (H * 0.09) * Math.sqrt(rng());
-      const u = rng() * Math.PI * 2;
-      const p = new THREE.Vector3(Math.cos(u) * rad + lean.x * y, y, Math.sin(u) * rad + lean.z * y);
-      const face = new THREE.Vector3(Math.cos(u), 0.2, Math.sin(u)).normalize();
-      pushCard(leaves, p, face, sizeK * THREE.MathUtils.lerp(sp.card[0], sp.card[1], rng()), sp.cell, rng, new THREE.Vector3(lean.x * y, y, lean.z * y), H * 0.09);
-    }
-  } else {
-    // oak / olive: forked limbs, clustered leaf masses
-    const nb = species === 'olive' ? 4 + Math.floor(rng() * 3) : 5 + Math.floor(rng() * 4);
-    crownC.copy(top).add(new THREE.Vector3(0, H * 0.25, 0));
-    crownR = H * (species === 'olive' ? 0.42 : 0.4);
-    for (let b = 0; b < nb; b++) {
-      const a = (b / nb) * Math.PI * 2 + rng();
-      const start = trunkPts[Math.max(2, nT - 1 - Math.floor(rng() * 2))].clone();
-      const len = H * (0.3 + rng() * 0.18);
-      const dir = new THREE.Vector3(Math.cos(a), 0.75 + rng() * 0.5, Math.sin(a)).normalize();
-      const mid = start.clone().addScaledVector(dir, len * 0.5).add(new THREE.Vector3((rng() - 0.5) * 0.6, 0, (rng() - 0.5) * 0.6));
-      const end = start.clone().addScaledVector(dir, len);
-      wood.push(taperedTube([start, mid, end], R0 * 0.55, R0 * 0.14, lod ? 3 : 5));
-      tips.push(end, mid.clone().lerp(end, 0.4));
-      for (let k = 0; k < (lod ? 0 : 2); k++) {
-        const s2 = start.clone().lerp(end, 0.4 + rng() * 0.4);
-        const d2 = new THREE.Vector3(Math.cos(a + (rng() - 0.5) * 2.4), 0.5 + rng() * 0.5, Math.sin(a + (rng() - 0.5) * 2.4)).normalize();
-        const e2 = s2.clone().addScaledVector(d2, len * 0.4);
-        wood.push(taperedTube([s2, e2], R0 * 0.15, R0 * 0.05, 3));
-        tips.push(e2);
-      }
-    }
-    for (const tip of tips) {
-      const n = Math.round(sp.density * cardK * (lod ? 1.6 : 1) * (0.6 + rng() * 0.7));
-      const rad = H * (species === 'olive' ? 0.15 : 0.16) * (0.8 + rng() * 0.4);
-      for (let i = 0; i < n; i++) {
-        // points in a squashed sphere around the tip
-        const u = rng() * Math.PI * 2, v = Math.acos(2 * rng() - 1), r = Math.cbrt(rng()) * rad;
-        const off = new THREE.Vector3(Math.sin(v) * Math.cos(u), Math.cos(v) * 0.7, Math.sin(v) * Math.sin(u)).multiplyScalar(r);
-        const p = tip.clone().add(off);
-        const face = off.clone().normalize().add(new THREE.Vector3((rng() - 0.5) * 0.6, 0.3, (rng() - 0.5) * 0.6)).normalize();
-        pushCard(leaves, p, face, sizeK * THREE.MathUtils.lerp(sp.card[0], sp.card[1], rng()), sp.cell, rng, crownC, crownR);
-      }
-    }
-  }
-  const woodGeo = mergeGeometries(wood.map((g) => g.index ? g : g), false);
-  return { wood: woodGeo, leaves: leafGeometry(leaves), height: H };
-}
-
-export function makeShrub(seed, { cell = ATLAS.broad, size = 1.4, cards = 46, flat = 0.6 } = {}) {
-  const rng = mulberry32(seed * 104729 + 7);
-  const leaves = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-  const c = new THREE.Vector3(0, size * 0.35, 0);
-  const lobes = 2 + Math.floor(rng() * 3);
-  for (let l = 0; l < lobes; l++) {
-    const lc = c.clone().add(new THREE.Vector3((rng() - 0.5) * size * 0.8, (rng() - 0.3) * size * 0.3, (rng() - 0.5) * size * 0.8));
-    for (let i = 0; i < cards / lobes; i++) {
-      const u = rng() * Math.PI * 2, v = Math.acos(2 * rng() - 1), r = Math.cbrt(rng()) * size * 0.55;
-      const off = new THREE.Vector3(Math.sin(v) * Math.cos(u), Math.abs(Math.cos(v)) * flat, Math.sin(v) * Math.sin(u)).multiplyScalar(r);
-      const p = lc.clone().add(off);
-      p.y = Math.max(p.y, 0.05);
-      const face = off.clone().normalize().add(new THREE.Vector3(0, 0.4, 0)).normalize();
-      pushCard(leaves, p, face, size * (0.45 + rng() * 0.3), cell, rng, c, size * 0.7);
-    }
-  }
-  return leafGeometry(leaves);
-}
-
-// hanging cascade: a dense cushion at the slab lip that thins into a few
-// tendrils (bougainvillea / jasmine habit), not a uniform curtain
-function vineStrand(rng, len) {
-  const leaves = { pos: [], nrm: [], uv: [], col: [], idx: [] };
-  const c = new THREE.Vector3(0, -len * 0.3, 0.25);
-  // cushion over the edge
-  for (let i = 0; i < 9; i++) {
-    const p = new THREE.Vector3((rng() - 0.5) * 0.9, -rng() * 0.45 + 0.05, 0.05 + rng() * 0.3);
-    const face = new THREE.Vector3((rng() - 0.5) * 0.8, 0.3 + rng() * 0.5, 1).normalize();
-    pushCard(leaves, p, face, 0.75 + rng() * 0.35, i % 3 ? ATLAS.ivy : ATLAS.broad, rng, c, len * 0.5, 1.0);
-  }
-  // 1-3 tendrils
-  const nT = 1 + Math.floor(rng() * 3);
-  for (let t = 0; t < nT; t++) {
-    let x = (rng() - 0.5) * 0.6, z = 0.12 + rng() * 0.15;
-    const L = len * (0.5 + rng() * 0.5);
-    const n = Math.max(2, Math.round(L / 0.3));
-    for (let i = 0; i < n; i++) {
-      const k = i / n;
-      x += (rng() - 0.5) * 0.08;
-      const y = -0.3 - k * L;
-      const face = new THREE.Vector3((rng() - 0.5) * 0.9, 0, 1).normalize();
-      pushCard(leaves, new THREE.Vector3(x, y, z), face, (0.55 - 0.25 * k) * (0.85 + rng() * 0.3), ATLAS.ivy, rng, c, len * 0.6, 0.8);
-    }
-  }
-  return leafGeometry(leaves);
-}
-
-// ---------------------------------------------------------------------------
-function leafMaterial(atlas, msaa) {
-  const m = new THREE.MeshStandardMaterial({
-    map: atlas,
-    alphaTest: 0.42,
-    side: THREE.DoubleSide,
-    vertexColors: true,
-    roughness: 0.78,
-    metalness: 0,
-    envMapIntensity: 0.55,
-  });
-  m.alphaToCoverage = msaa > 0;
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uSunDirL = atmosphereUniforms.uSunDir;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vLW;')
-      .replace('#include <worldpos_vertex>', `#include <worldpos_vertex>
-#ifdef USE_INSTANCING
-vLW = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
-#else
-vLW = (modelMatrix * vec4(transformed, 1.0)).xyz;
-#endif`);
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <alphatest_fragment>', `
-{
-  // alpha coverage shrinks in lower mips; scale it back up with the mip level
-  vec2 dx = dFdx(vMapUv * 1024.0), dy = dFdy(vMapUv * 1024.0);
-  float mip = 0.5 * log2(max(dot(dx, dx), dot(dy, dy)));
-  diffuseColor.a *= 1.0 + 0.35 * clamp(mip, 0.0, 6.0);
-}
-#include <alphatest_fragment>`)
-      .replace('#include <common>', '#include <common>\nvarying vec3 vLW;\nuniform vec3 uSunDirL;')
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-{
-  // backlit translucency toward the low sun
-  vec3 vdir = normalize(vLW - cameraPosition);
-  float back = pow(max(dot(vdir, uSunDirL), 0.0), 3.0);
-  totalEmissiveRadiance += diffuseColor.rgb * vec3(1.0, 0.85, 0.55) * back * 0.9 * vColor.r;
-}`);
-  };
-  m.customProgramCacheKey = () => 'leaf-v2';
-  return m;
-}
-
-function barkMaterial() {
-  return materials({ name: 'still' }).bark;
+// Detail tier of a tree from its distance to the villa and to the exterior
+// cameras (static, so every still and every camera sees the same world):
+// 0 = full skeleton + twig sprays, 1 = limbs + clump cards, 2 = trunk + clumps.
+function treeLod(x, y) {
+  const dv = Math.hypot(x, y - 3);
+  let dc = Infinity;
+  for (const c of EXT_CAMS) dc = Math.min(dc, Math.hypot(x - c[0], y - c[1]));
+  if (dv < 30 || dc < 24) return 0;
+  if (dv < 110 || dc < 60) return 1;
+  return 2;
 }
 
 // ---------------------------------------------------------------------------
 export function buildVegetation(ctx) {
-  const { scene, field, quality, renderer } = ctx;
+  const { scene, field, quality } = ctx;
   const root = new THREE.Group();
   root.name = 'vegetation';
   scene.add(root);
-  const atlas = foliageAtlas();
-  atlas.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  const leafMat = leafMaterial(atlas, quality.msaa);
-  const bark = barkMaterial();
+  const leafMat = foliageMaterial({ msaa: quality.msaa });
   const density = quality.vegetation ?? 1;
   const rng = mulberry32(4242);
   const nz = new Simplex(77);
@@ -365,7 +66,6 @@ export function buildVegetation(ctx) {
   // exclusion zones (plan coords)
   const deck = deckOutline();
   const deckPad = offset(deck, 1.6);
-  const pool = ccw(smooth(POOL_PTS, 120));
   const roof = ccw(smooth(ROOF_PTS, 200));
   const l1 = ccw(smooth(L1_PTS, 220));
   const upper = ccw(smooth(UPPER_PTS, 200));
@@ -383,28 +83,28 @@ export function buildVegetation(ctx) {
     return false;
   };
 
-  // --- tree variants -----------------------------------------------------------
-  const variants = { pine: [], oak: [], olive: [], cypress: [] };
-  const variantsLow = { pine: [], oak: [], olive: [], cypress: [] };
-  const nVar = { pine: 6, oak: 7, olive: 4, cypress: 3 };
-  for (const sp of Object.keys(variants)) {
-    for (let i = 0; i < nVar[sp]; i++) {
-      variants[sp].push(makeTree(sp, i + 1 + sp.length * 31, 0));
-      variantsLow[sp].push(makeTree(sp, i + 1 + sp.length * 31, 1));
-    }
+  // --- variants ----------------------------------------------------------------
+  const nVar = { pine: 7, aleppo: 5, oak: 8, olive: 7, cypress: 4 };
+  const trees = {};
+  for (const sp of Object.keys(nVar)) {
+    trees[sp] = [];
+    for (let i = 0; i < nVar[sp]; i++) trees[sp].push(makeTreeVariant(sp, i + 1 + sp.length * 31));
   }
-  const shrubVariants = [];
-  for (let i = 0; i < 8; i++) shrubVariants.push(makeShrub(i + 3, { cell: i % 4 === 3 ? ATLAS.ivy : ATLAS.broad, size: 1.0 + (i % 3) * 0.4 }));
-  const groundCover = [];
-  for (let i = 0; i < 4; i++) groundCover.push(makeShrub(i + 50, { cell: ATLAS.ivy, size: 0.7, cards: 22, flat: 0.35 }));
+  const shrubKinds = { lentisk: 4, myrtle: 3, broad: 3, rosemary: 3, lavender: 3, grassA: 3, grassB: 3, flowersW: 3, flowersP: 3, ivy: 3, cushion: 2 };
+  const shrubs = {};
+  for (const [k, n] of Object.entries(shrubKinds)) {
+    shrubs[k] = [];
+    for (let i = 0; i < n; i++) shrubs[k].push(makeShrub(k, i + 3));
+  }
+  const agaves = [0, 1, 2, 3].map((i) => makeAgave(i + 1, 0.8 + i * 0.15));
+  const agaveMat = agaveMaterial();
 
-  // instance collections: key -> array of matrices + colours
+  // instance collections: key -> geometry + material + matrices + tints
   const inst = new Map();
-  const push = (key0, geoWood, geoLeaf, m, tint) => {
-    const px = m.elements[12], pz = m.elements[14];
-    const key = key0 + (Math.hypot(px, pz) < 85 ? '' : '|far');
-    if (!inst.has(key)) inst.set(key, { wood: geoWood, leaf: geoLeaf, mats: [], cols: [] });
-    const e = inst.get(key);
+  const push = (key, geo, mat, m, tint, far, shadow = true) => {
+    const k = key + (far ? '|far' : '');
+    if (!inst.has(k)) inst.set(k, { geo, mat, mats: [], cols: [], far, shadow });
+    const e = inst.get(k);
     e.mats.push(m);
     e.cols.push(tint);
   };
@@ -412,21 +112,34 @@ export function buildVegetation(ctx) {
     const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt * (rng() - 0.5), rotY, tilt * (rng() - 0.5)));
     return new THREE.Matrix4().compose(new THREE.Vector3(x, z, -y), q, new THREE.Vector3(s, s * (0.9 + rng() * 0.2), s));
   };
-  const tintColor = (h, s, l) => new THREE.Color().setHSL(h, s, l);
 
-  const placeTree = (sp, x, y, z, s) => {
-    const vi = Math.floor(rng() * variants[sp].length);
+  const placeTree = (sp, x, y, z, s, lodOverride) => {
+    const vi = Math.floor(rng() * trees[sp].length);
+    const v = trees[sp][vi];
+    const lod = lodOverride ?? treeLod(x, y);
     const far = Math.hypot(x, y - 5) > 85;
-    const v = (far ? variantsLow : variants)[sp][vi];
-    const r = rng();
-    const t = sp === 'olive' ? new THREE.Color(0.95 + r * 0.1, 0.95 + r * 0.08, 0.9 + r * 0.1) : new THREE.Color(0.8 + r * 0.3, 0.88 + r * 0.2, 0.7 + rng() * 0.3);
-    push(`${sp}-${vi}`, v.wood, v.leaves, mtx(x, y, z - 0.05, s, rng() * Math.PI * 2, sp === 'pine' ? 0.25 : 0.12), t);
+    const r = rng(), r2 = rng();
+    const tint = sp === 'olive'
+      ? new THREE.Color(0.94 + r * 0.12, 0.95 + r * 0.1, 0.9 + r2 * 0.14)
+      : new THREE.Color(0.82 + r * 0.26, 0.86 + r * 0.2, 0.74 + r2 * 0.3);
+    const m = mtx(x, y, z - 0.05, s, rng() * Math.PI * 2, sp === 'pine' || sp === 'aleppo' ? 0.2 : 0.1);
+    const L = v.lods[lod];
+    push(`${sp}-${vi}-w${lod}`, L.wood, barkMaterial(v.bark), m, new THREE.Color(0.9 + r2 * 0.2, 0.9 + r2 * 0.15, 0.9 + r2 * 0.1), far, !far);
+    push(`${sp}-${vi}-l${lod}`, L.leaves, leafMat, m, tint, far, !far);
   };
-  const placeShrub = (x, y, z, s, set = shrubVariants, prefix = 'shrub') => {
+  const MAQUIS = ['lentisk', 'lentisk', 'lentisk', 'myrtle', 'myrtle', 'broad', 'rosemary', 'rosemary', 'grassB', 'grassB', 'grassA', 'lavender', 'flowersW', 'ivy'];
+  const placeShrub = (kind, x, y, z, s, shadow = true) => {
+    const set = shrubs[kind];
     const vi = Math.floor(rng() * set.length);
     const r = rng();
-    const t = new THREE.Color(0.82 + r * 0.3, 0.8 + r * 0.2, 0.62 + rng() * 0.3);
-    push(`${prefix}-${vi}`, null, set[vi], mtx(x, y, z - 0.05, s, rng() * Math.PI * 2, 0.2), t);
+    const t = new THREE.Color(0.86 + r * 0.24, 0.86 + r * 0.18, 0.76 + rng() * 0.26);
+    const far = Math.hypot(x, y - 5) > 85;
+    push(`${kind}-${vi}`, set[vi], leafMat, mtx(x, y, z - 0.04, s, rng() * Math.PI * 2, 0.16), t, far, shadow && !far);
+  };
+  const placeAgave = (x, y, z, s) => {
+    const vi = Math.floor(rng() * agaves.length);
+    const g = 0.9 + rng() * 0.2;
+    push(`agave-${vi}`, agaves[vi], agaveMat, mtx(x, y, z - 0.02, s, rng() * Math.PI * 2, 0.08), new THREE.Color(g, g, g), false, true);
   };
 
   // --- natural scatter around the site (0..320 m) ----------------------------
@@ -448,14 +161,17 @@ export function buildVegetation(ctx) {
     // keep the cliff below the pool, waterfall and firepit open to view (photos)
     const viewCorridor = y < -11 && y > -70 && x > -18 && x < 26;
     if (slope < 0.5 && patch > -0.1 && r < 0.28 && !viewCorridor && !blocksSightline(x, y, h)) {
-      // trees: pines on the coast/cliff tops, oaks inland
+      // stone and Aleppo pines on the coast / cliff tops, holm oaks inland
       const coastal = h < 40 || y < 0;
-      const sp = coastal ? (rng() < 0.6 ? 'pine' : 'oak') : rng() < 0.22 ? 'pine' : rng() < 0.06 ? 'cypress' : 'oak';
-      if (nearSea && sp !== 'pine') continue;
-      placeTree(sp, x, y, h, 0.75 + rng() * 0.55);
+      const q = rng();
+      const sp = coastal ? (q < 0.45 ? 'pine' : q < 0.72 ? 'aleppo' : 'oak') : q < 0.2 ? 'pine' : q < 0.3 ? 'aleppo' : q < 0.36 ? 'cypress' : q < 0.42 ? 'olive' : 'oak';
+      if (nearSea && sp !== 'pine' && sp !== 'aleppo') continue;
+      placeTree(sp, x, y, h, 0.75 + rng() * 0.5);
     } else if (r < 0.92) {
       if (blocksSightline(x, y, h, 2.2, 13)) continue;
-      placeShrub(x, y, h, (0.7 + rng() * 1.0) * (slope > 0.45 ? 0.8 : 1.15) * (viewCorridor ? 0.8 : 1));
+      // steep ground: low rosemary / grasses; flats: lentisk & myrtle masses
+      const kind = slope > 0.45 ? (rng() < 0.5 ? 'rosemary' : 'grassB') : MAQUIS[Math.floor(rng() * MAQUIS.length)];
+      placeShrub(kind, x, y, h, (0.75 + rng() * 0.75) * (slope > 0.45 ? 0.85 : 1.1) * (viewCorridor ? 0.8 : 1));
     }
   }
 
@@ -469,30 +185,39 @@ export function buildVegetation(ctx) {
     if (field.slope(x, y, 1.5) > 0.45) continue;
     if (nz.fbm2(x / 60, y / 60, 3) < -0.2) continue;
     if (blocksSightline(x, y, h)) continue;
-    const sp = h < 30 ? (rng() < 0.6 ? 'pine' : 'oak') : rng() < 0.25 ? 'pine' : 'oak';
-    placeTree(sp, x, y, h, 0.85 + rng() * 0.5);
+    const q = rng();
+    const sp = h < 30 ? (q < 0.45 ? 'pine' : q < 0.65 ? 'aleppo' : 'oak') : q < 0.25 ? 'pine' : 'oak';
+    placeTree(sp, x, y, h, 0.85 + rng() * 0.5, 2);
   }
 
   // --- curated planting near the house ---------------------------------------
   // entry: one mature sculptural olive in the ring planter
-  push('olive-hero', variants.olive[0].wood, variants.olive[0].leaves,
-    new THREE.Matrix4().compose(new THREE.Vector3(COURT.cx, 18.32, -COURT.cy), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.8), new THREE.Vector3(1.45, 1.35, 1.45)),
-    new THREE.Color(1, 1, 1));
-  for (let i = 0; i < 26; i++) {
-    const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * (COURT.planterR - 0.5);
-    placeShrub(COURT.cx + Math.cos(a) * r, COURT.cy + Math.sin(a) * r, 18.38, 0.55 + rng() * 0.3, groundCover, 'gc');
+  {
+    const v = trees.olive[0];
+    const m = new THREE.Matrix4().compose(new THREE.Vector3(COURT.cx, 18.32, -COURT.cy), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), 0.8), new THREE.Vector3(1.45, 1.35, 1.45));
+    push('olive-hero-w', v.lods[0].wood, barkMaterial('olive'), m, new THREE.Color(1, 1, 1), false);
+    push('olive-hero-l', v.lods[0].leaves, leafMat, m, new THREE.Color(1, 1, 1), false);
   }
-  // court edge planting + boulders handled by rocks module; trees framing the court
-  for (const [x, y, s] of [[-8.5, 25, 1.05], [14.5, 25, 0.95], [-8, 33, 1.1], [14, 34, 0.9], [-11.5, 20.5, 0.85]]) placeTree('olive', x, y, field.height(x, y), s);
-  for (const [x, y] of [[-12.5, 16], [16.5, 17.5], [19.5, 14], [-15.5, 13.5]]) placeTree('cypress', x, y, field.height(x, y), 0.9);
-  // around the court perimeter: low shrubs
-  for (let i = 0; i < 70; i++) {
+  // ring planter: groundcover, lavender, grasses, white perennials
+  for (let i = 0; i < 40; i++) {
+    const a = rng() * Math.PI * 2, r = Math.sqrt(rng()) * (COURT.planterR - 0.45);
+    const k = r < 0.9 ? 'ivy' : ['ivy', 'lavender', 'grassB', 'flowersW', 'ivy'][Math.floor(rng() * 5)];
+    placeShrub(k, COURT.cx + Math.cos(a) * r, COURT.cy + Math.sin(a) * r, 18.38, 0.6 + rng() * 0.35, k !== 'ivy');
+  }
+  // trees framing the court
+  for (const [x, y, s] of [[-8.5, 25, 1.05], [14.5, 25, 0.95], [-8, 33, 1.1], [14, 34, 0.9], [-11.5, 20.5, 0.85]]) placeTree('olive', x, y, field.height(x, y), s, 0);
+  for (const [x, y] of [[-12.5, 16], [16.5, 17.5], [19.5, 14], [-15.5, 13.5]]) placeTree('cypress', x, y, field.height(x, y), 0.9, 0);
+  // around the court perimeter: Mediterranean border (lavender, rosemary, grasses, agaves)
+  for (let i = 0; i < 90; i++) {
     const a = rng() * Math.PI * 2;
     const r = COURT.r + 0.9 + rng() * 3.5;
     const x = COURT.cx + Math.cos(a) * r, y = COURT.cy + Math.sin(a) * r;
     if (y < 13 || (y > 28 && Math.abs(x - 3.5) < 4)) continue;
     if (blocksSightline(x, y, field.height(x, y), 2.0, 13)) continue;
-    placeShrub(x, y, field.height(x, y), 0.8 + rng() * 0.6);
+    const q = rng();
+    const h = field.height(x, y);
+    if (q < 0.08 && r < COURT.r + 2.5) placeAgave(x, y, h, 0.9 + rng() * 0.5);
+    else placeShrub(q < 0.3 ? 'lavender' : q < 0.45 ? 'rosemary' : q < 0.6 ? 'grassA' : q < 0.72 ? 'flowersP' : q < 0.85 ? 'myrtle' : 'lentisk', x, y, h, 0.8 + rng() * 0.6);
   }
   // deck planters (olives in stone planters) on the terraces
   const planterGeo = [];
@@ -501,13 +226,22 @@ export function buildVegetation(ctx) {
     const pg = new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(0.75, 0), new THREE.Vector2(0.85, 0.7), new THREE.Vector2(0.78, 0.72), new THREE.Vector2(0.7, 0.62), new THREE.Vector2(0, 0.62)], 48);
     pg.translate(x, LEVEL.main, -y);
     planterGeo.push(pg);
-    placeTree('olive', x, y, LEVEL.main + 0.62, s);
+    placeTree('olive', x, y, LEVEL.main + 0.62, s, 0);
+    for (let k = 0; k < 4; k++) {
+      const a = rng() * Math.PI * 2, r = 0.25 + rng() * 0.4;
+      placeShrub(k % 2 ? 'ivy' : 'grassB', x + Math.cos(a) * r, y + Math.sin(a) * r, LEVEL.main + 0.62, 0.5, false);
+    }
   }
   const planters = new THREE.Mesh(mergeGeometries(planterGeo), M.planter);
   planters.castShadow = planters.receiveShadow = true;
   root.add(planters);
+  // agave / aloe accents at the terrace ends and the firepit stair head
+  for (const [x, y] of [[21.4, -14.6], [22.0, -12.4], [-22.6, 3.8], [-22.2, 6.2], [17.2, -21.6], [9.2, -22.4]]) {
+    if (blocked(x, y)) continue;
+    placeAgave(x, y, field.height(x, y), 0.9 + rng() * 0.4);
+  }
 
-  // --- roof garden -------------------------------------------------------------
+  // --- roof garden (ref 10: perennials, grasses, flowering patches, small trees) ---
   {
     const soil = offset(roof, -0.55);
     const atr = ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 1.0, ATRIUM.ry + 1.0, 64, ATRIUM.rot);
@@ -519,111 +253,127 @@ export function buildVegetation(ctx) {
     const soilMesh = new THREE.Mesh(sg, groundMaterial());
     soilMesh.receiveShadow = true;
     root.add(soilMesh);
-    // dense planting on the roof
+    const zr = LEVEL.roof + 0.22;
+    // drifts: a low-frequency field decides which planting dominates where
+    const drift = new Simplex(4711);
     let placed = 0;
-    for (let i = 0; i < 2600 * density && placed < 900 * density; i++) {
+    for (let i = 0; i < 3000 * density && placed < 1000 * density; i++) {
       const x = -20 + rng() * 40, y = -10.5 + rng() * 22.5;
       if (!pointInPoly(x, y, soil) || pointInPoly(x, y, atr)) continue;
       placed++;
-      const edge = distToPoly(x, y, soil);
-      if (rng() < 0.55) placeShrub(x, y, LEVEL.roof + 0.22, 0.45 + rng() * 0.45, groundCover, 'gc');
-      else placeShrub(x, y, LEVEL.roof + 0.22, (0.5 + rng() * 0.6) * (edge < 1.2 ? 1.1 : 0.9));
+      const d = drift.fbm2(x / 7, y / 7, 2), d2 = drift.fbm2(x / 4 + 9, y / 4, 2);
+      let k;
+      if (d > 0.28) k = rng() < 0.75 ? 'lavender' : 'rosemary';
+      else if (d < -0.3) k = rng() < 0.6 ? 'grassA' : 'grassB';
+      else if (d2 > 0.25) k = rng() < 0.6 ? 'flowersW' : 'flowersP';
+      else k = ['ivy', 'grassB', 'myrtle', 'flowersP', 'ivy', 'lentisk'][Math.floor(rng() * 6)];
+      placeShrub(k, x, y, zr, 0.55 + rng() * 0.45, k !== 'ivy');
     }
-    for (const [x, y, s] of [[-12.5, 2.5, 0.85], [6.5, 4.5, 0.95], [12.0, -3.5, 0.8], [-15.5, -3.2, 0.7], [1.5, -6.5, 0.7]]) placeTree('olive', x, y, LEVEL.roof + 0.22, s);
+    // small multi-stem olives and a few larger ones
+    for (const [x, y, s] of [[-12.5, 2.5, 0.85], [6.5, 4.5, 0.95], [12.0, -3.5, 0.8], [-15.5, -3.2, 0.7], [1.5, -6.5, 0.7], [-8.5, 7.5, 0.6], [14.5, 3.0, 0.62], [-2.0, 8.6, 0.58]]) placeTree('olive', x, y, zr, s, 0);
     // lush band along the roof edge (spills over in the photos)
     for (const p of resample([...offset(roof, -0.95), offset(roof, -0.95)[0]], 0.55)) {
       if (p.y > 10) continue;
-      placeShrub(p.x, p.y, LEVEL.roof + 0.22, 0.8 + rng() * 0.6);
+      const q = rng();
+      placeShrub(q < 0.3 ? 'cushion' : q < 0.55 ? 'myrtle' : q < 0.75 ? 'broad' : q < 0.88 ? 'grassA' : 'lavender', p.x, p.y, zr, 0.95 + rng() * 0.55);
+    }
+    // taller evergreen masses and multi-stem trees a little further in, so the
+    // garden reads over the slab edge from the terraces and the entry court
+    for (const p of resample([...offset(roof, -2.2), offset(roof, -2.2)[0]], 1.7)) {
+      if (pointInPoly(p.x, p.y, atr)) continue;
+      const q = rng();
+      if (q < 0.18) placeTree('olive', p.x, p.y, zr, 0.5 + rng() * 0.25, 0);
+      else placeShrub(q < 0.55 ? 'broad' : q < 0.8 ? 'lentisk' : 'grassA', p.x, p.y, zr, 1.1 + rng() * 0.5);
     }
   }
   // planted entry canopy: the L1 bulge over the door is a green roof too
   for (let i = 0; i < 260 * density; i++) {
     const x = -1.5 + rng() * 10, y = 11.0 + rng() * 5.4;
     if (!pointInPoly(x, y, offset(l1, -0.4)) || pointInPoly(x, y, offset(upper, 0.6))) continue;
-    placeShrub(x, y, LEVEL.upper, 0.5 + rng() * 0.45, rng() < 0.6 ? groundCover : shrubVariants, rng() < 0.6 ? 'gc' : 'shrub');
+    const k = ['ivy', 'grassB', 'lavender', 'flowersW', 'myrtle', 'broad', 'grassA'][Math.floor(rng() * 7)];
+    placeShrub(k, x, y, LEVEL.upper, (k === 'broad' || k === 'myrtle' ? 0.8 : 0.55) + rng() * 0.4);
   }
-
   // L1 terrace edge planters (soil strip just inside the slab edge)
   {
     const strip = offset(l1, -0.6);
     for (const p of resample([...strip, strip[0]], 0.7)) {
       if (pointInPoly(p.x, p.y, offset(upper, 1.0))) continue;
       if (p.y > 9) continue;
-      placeShrub(p.x, p.y, LEVEL.upper, 0.45 + rng() * 0.35, rng() < 0.5 ? groundCover : shrubVariants, rng() < 0.5 ? 'gc' : 'shrub');
+      const k = ['cushion', 'myrtle', 'grassA', 'myrtle', 'lavender', 'broad', 'cushion'][Math.floor(rng() * 7)];
+      placeShrub(k, p.x, p.y, LEVEL.upper, (k === 'cushion' ? 1.0 : 0.7) + rng() * 0.4);
     }
   }
 
-  // --- hanging vines from slab edges (clustered cascades) ---------------------
-  const vineVariants = [];
-  for (let i = 0; i < 10; i++) vineVariants.push(vineStrand(mulberry32(900 + i), 0.8 + (i % 5) * 0.45));
-  const vineShort = [];
-  for (let i = 0; i < 6; i++) vineShort.push(vineStrand(mulberry32(950 + i), 0.35 + (i % 3) * 0.2));
-  const vineAlong = (outline, z, inset, step, skip, set = vineVariants, keyPrefix = 'vine') => {
+  // --- cascades from slab edges: bougainvillea / jasmine, 0.5-2.5 m ----------
+  const cascades = [];
+  for (let i = 0; i < 12; i++) cascades.push(makeCascade(900 + i, 0.6 + (i % 6) * 0.38, i % 3 === 0 ? 'boug' : i % 3 === 1 ? 'mix' : 'green'));
+  const cascShort = [];
+  for (let i = 0; i < 6; i++) cascShort.push(makeCascade(950 + i, 0.4 + (i % 3) * 0.25, i % 2 ? 'green' : 'mix'));
+  const vineAlong = (outline, z, inset, step, skip, set, keyPrefix, thresh = 0.12) => {
     const pts = resample([...outline, outline[0]], step);
     for (let i = 0; i < pts.length - 1; i++) {
       const p = pts[i], q = pts[i + 1];
       if (skip && skip(p)) continue;
       const cluster = nz.fbm2(p.x / 5.5, p.y / 5.5, 2);
-      if (cluster < 0.12) continue;
+      if (cluster < thresh) continue;
       const t = new THREE.Vector2().subVectors(q, p).normalize();
       const out = new THREE.Vector2(t.y, -t.x);
-      const strands = 1 + Math.floor((cluster - 0.12) * 5 * rng());
-      for (let k = 0; k < strands; k++) {
+      // clustered: 1-3 overlapping cascades per edge point where the field is high
+      const nC = 1 + Math.floor(Math.max(0, cluster - thresh) * 6 * rng() + rng() * 1.2);
+      for (let c = 0; c < nC; c++) {
         const vi = Math.floor(rng() * set.length);
-        const x = p.x + out.x * (inset + rng() * 0.12) + t.x * (rng() - 0.5) * step;
-        const y = p.y + out.y * (inset + rng() * 0.12) + t.y * (rng() - 0.5) * step;
-        const yaw = Math.atan2(out.x, out.y) + (rng() - 0.5) * 0.6;
+        const along = (rng() - 0.5) * step;
+        const x = p.x + out.x * (inset + rng() * 0.1) + t.x * along;
+        const y = p.y + out.y * (inset + rng() * 0.1) + t.y * along;
+        // local +z (outward) -> plan outward normal (three: x, -y)
+        const yaw = Math.atan2(out.x, -out.y) + (rng() - 0.5) * 0.3;
         const m = new THREE.Matrix4().compose(
           new THREE.Vector3(x, z, -y),
           new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
-          new THREE.Vector3(1, 0.8 + rng() * 0.5, 1),
+          new THREE.Vector3(1.0 + rng() * 0.4, (0.85 + rng() * 0.55 + Math.max(0, cluster - 0.2)) * lenK, 1),
         );
-        push(`${keyPrefix}-${vi}`, null, set[vi], m, new THREE.Color(1.25 + rng() * 0.2, 1.4, 0.75 + rng() * 0.15));
+        const g = 0.92 + rng() * 0.16;
+        push(`${keyPrefix}-${vi}`, set[vi], leafMat, m, new THREE.Color(g, g * (0.98 + rng() * 0.06), g * (0.9 + rng() * 0.1)), false, true);
       }
     }
   };
-  vineAlong(l1, LEVEL.upper + 0.15, 0.06, 0.55, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11));
-  vineAlong(roof, LEVEL.roof + 0.2, 0.06, 0.5, (p) => p.y > 3.5);
+  let lenK = 1.15;
+  vineAlong(l1, LEVEL.upper + 0.12, 0.05, 0.55, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11), cascades, 'casc', -0.08);
+  vineAlong(roof, LEVEL.roof + 0.2, 0.05, 0.5, (p) => p.y > 3.5, cascades, 'casc', -0.08);
+  lenK = 1;
   // into the atrium (seen from the living room)
   const shaftRing = ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.04, ATRIUM.ry - 0.04, 64, ATRIUM.rot)).reverse();
-  vineAlong(shaftRing, LEVEL.upper - 0.6, -0.05, 0.55, null, vineShort, 'vineS');
-  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, -0.08, 0.45, null, vineVariants, 'vineA');
+  vineAlong(shaftRing, LEVEL.upper - 0.6, -0.05, 0.55, null, cascShort, 'cascS', 0.0);
+  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, -0.08, 0.5, null, cascades, 'cascA', 0.05);
   // the roof lip around the opening spills greenery into the shaft
-  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, vineShort, 'vineS');
+  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, cascShort, 'cascS', -0.05);
 
   // --- build instanced meshes -------------------------------------------------
   const tmpCol = new THREE.Color();
+  let tris = 0;
   for (const [key, e] of inst) {
     const count = e.mats.length;
-    const near = !key.endsWith('|far');
-    if (e.wood) {
-      const im = new THREE.InstancedMesh(e.wood, bark, count);
-      for (let i = 0; i < count; i++) im.setMatrixAt(i, e.mats[i]);
-      im.castShadow = near;
-      im.receiveShadow = true;
-      im.computeBoundingSphere();
-      if (!near) im.layers.set(2);
-      root.add(im);
-    }
-    const lm = new THREE.InstancedMesh(e.leaf, leafMat, count);
+    const im = new THREE.InstancedMesh(e.geo, e.mat, count);
     for (let i = 0; i < count; i++) {
-      lm.setMatrixAt(i, e.mats[i]);
-      lm.setColorAt(i, tmpCol.copy(e.cols[i]));
+      im.setMatrixAt(i, e.mats[i]);
+      im.setColorAt(i, tmpCol.copy(e.cols[i]));
     }
-    lm.castShadow = near && !key.startsWith('gc');
-    lm.receiveShadow = true;
-    lm.computeBoundingSphere();
-    lm.name = key;
-    if (!near) lm.layers.set(2);
-    root.add(lm);
+    im.castShadow = e.shadow;
+    im.receiveShadow = true;
+    im.computeBoundingSphere();
+    im.name = key;
+    if (e.far) im.layers.set(2);
+    root.add(im);
+    tris += (e.geo.index ? e.geo.index.count : e.geo.attributes.position.count) / 3 * count;
   }
 
-  // --- distant forest: lumpy canopy domes (3 km) ------------------------------
+  // --- distant forest: clustered canopy stands (> 600 m) ---------------------
   buildFarForest(root, field, quality, nz);
 
   // --- indoor plants -----------------------------------------------------------
   buildIndoorPlants(root, quality);
 
+  root.userData.instancedTriangles = Math.round(tris);
   return { root, update() {} };
 }
 
@@ -650,114 +400,4 @@ function groundMaterial() {
   return m;
 }
 
-function buildFarForest(root, field, quality, nz) {
-  const rng = mulberry32(777);
-  let base = new THREE.IcosahedronGeometry(1, 1);
-  base.deleteAttribute('normal');
-  base.deleteAttribute('uv');
-  base = mergeVertices(base, 1e-4);
-  const pos = base.attributes.position;
-  const s3 = new Simplex(5);
-  for (let i = 0; i < pos.count; i++) {
-    const v = new THREE.Vector3().fromBufferAttribute(pos, i);
-    const d = 1 + 0.22 * s3.noise3(v.x * 2.1, v.y * 2.1, v.z * 2.1) + 0.1 * s3.noise3(v.x * 5, v.y * 5, v.z * 5);
-    v.multiplyScalar(d);
-    if (v.y < -0.2) v.y = -0.2 + (v.y + 0.2) * 0.3;
-    v.y *= 0.8;
-    pos.setXYZ(i, v.x, v.y + 0.35, v.z);
-  }
-  base.computeVertexNormals();
-  // AO-ish vertex colour (darker underside)
-  const col = new Float32Array(pos.count * 3);
-  for (let i = 0; i < pos.count; i++) {
-    const y = pos.getY(i);
-    const ao = THREE.MathUtils.clamp(0.45 + y * 0.45, 0.3, 1);
-    col.set([ao, ao, ao], i * 3);
-  }
-  base.setAttribute('color', new THREE.BufferAttribute(col, 3));
-  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.95, envMapIntensity: 0.4 });
-  const count = Math.round(26000 * (quality.farForest ?? 1));
-  const im = new THREE.InstancedMesh(base, mat, count);
-  const m = new THREE.Matrix4();
-  const c = new THREE.Color();
-  let n = 0;
-  for (let i = 0; i < count * 6 && n < count; i++) {
-    const rr = 600 + Math.pow(rng(), 0.85) * 3200;
-    const a = rng() * Math.PI * 2;
-    const x = Math.cos(a) * rr + 400, y = Math.sin(a) * rr + 600;
-    if (Math.hypot(x, y - 20) < 640) continue;
-    const h = field.height(x, y);
-    if (h < 3) continue;
-    const slope = field.slope(x, y, 3);
-    if (slope > 0.42) continue;
-    const patch = nz.fbm2(x / 160, y / 160, 3);
-    if (patch < -0.25) continue;
-    const s = 3.8 + rng() * 5.0;
-    m.compose(new THREE.Vector3(x, h - 0.6, -y), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), rng() * 6.28), new THREE.Vector3(s, s * (0.75 + rng() * 0.5), s));
-    im.setMatrixAt(n, m);
-    c.setHSL(0.25 + rng() * 0.06, 0.32 + rng() * 0.18, 0.07 + rng() * 0.06);
-    im.setColorAt(n, c);
-    n++;
-  }
-  im.count = n;
-  im.castShadow = false;
-  im.receiveShadow = false;
-  im.computeBoundingSphere();
-  im.name = 'far-forest';
-  im.layers.set(2); // main camera only (not the floor reflection, not shadows)
-  root.add(im);
-}
-
-// large-leaf indoor plants (strelitzia-like) in stone pots
-function buildIndoorPlants(root, quality) {
-  const M = materials(quality);
-  const leafMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.10, 0.22, 0.07), roughness: 0.55, side: THREE.DoubleSide, envMapIntensity: 0.5 });
-  const stemMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(0.18, 0.24, 0.1), roughness: 0.7 });
-  const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-15.9, 0.0, 0.9], [4.0, 4.4, 0.85], [16.9, 2.4, 0.95], [-7.6, 3.9, 0.8]];
-  const leaves = [], stems = [], pots = [];
-  const rng = mulberry32(31337);
-  for (const [x, y, s] of spots) {
-    const pot = new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(0.3, 0), new THREE.Vector2(0.42, 0.22), new THREE.Vector2(0.4, 0.62), new THREE.Vector2(0.36, 0.64), new THREE.Vector2(0, 0.6)], 40);
-    pot.scale(s, s, s);
-    pot.translate(x, LEVEL.main, -y);
-    pots.push(pot);
-    const n = 7 + Math.floor(rng() * 4);
-    for (let i = 0; i < n; i++) {
-      const a = rng() * Math.PI * 2;
-      const lean = 0.15 + rng() * 0.35;
-      const len = (1.2 + rng() * 0.9) * s;
-      const dir = new THREE.Vector3(Math.cos(a) * lean, 1, Math.sin(a) * lean).normalize();
-      const start = new THREE.Vector3(x, LEVEL.main + 0.6 * s, -y);
-      const end = start.clone().addScaledVector(dir, len);
-      stems.push(new THREE.TubeGeometry(new THREE.LineCurve3(start, end), 4, 0.012, 5));
-      // blade: elongated ellipse, curved, oriented along stem tip direction
-      const L = (0.7 + rng() * 0.4) * s, W = (0.24 + rng() * 0.08) * s;
-      const g = new THREE.PlaneGeometry(W, L, 4, 10);
-      const p = g.attributes.position;
-      for (let k = 0; k < p.count; k++) {
-        const u = p.getX(k) / W, v = p.getY(k) / L + 0.5;
-        const width = Math.sin(Math.min(1, Math.max(0, v)) * Math.PI) ** 0.7;
-        p.setX(k, u * W * width);
-        p.setZ(k, -Math.pow(v, 2) * 0.18 * s + Math.abs(u) * 0.06 * s);
-        p.setY(k, v * L);
-      }
-      g.computeVertexNormals();
-      const q = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().add(new THREE.Vector3(Math.cos(a) * 0.4, 0, Math.sin(a) * 0.4)).normalize());
-      const twist = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), a + rng());
-      g.applyQuaternion(twist.premultiply(q));
-      g.translate(end.x, end.y, end.z);
-      leaves.push(g);
-    }
-  }
-  const mk = (arr, mat) => {
-    const mesh = new THREE.Mesh(mergeGeometries(arr.map((g) => g.index ? g.toNonIndexed() : g).map((g) => { for (const k of Object.keys(g.attributes)) if (!['position', 'normal', 'uv'].includes(k)) g.deleteAttribute(k); return g; })), mat);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    root.add(mesh);
-  };
-  mk(pots, M.planter);
-  mk(stems, stemMat);
-  mk(leaves, leafMat);
-}
-
-export { ATLAS, smoothstep };
+export { smoothstep, distToPoly };
