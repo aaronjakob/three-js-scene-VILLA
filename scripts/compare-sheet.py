@@ -11,16 +11,16 @@ import sys
 from PIL import Image, ImageDraw, ImageFont
 
 PAIRS = [
-    ('aerial', '02_coast_aerial.jpg', '01 Seaward aerial — render looks NW from the SE'),
+    ('aerial', '02_coast_aerial.jpg', '01 Seaward aerial — render looks E from the W, elevated'),
     ('seaward', '01_hero_seaward.jpg', '02 Seaward facade — render looks N from the sea'),
     ('entry', 'ref_entry.jpg', '03 North entry — render looks S from the driveway'),
     ('west', '03_pool_waterfall.jpg', '04 West waterfall — render looks ENE'),
     ('east', '04_lower_firepit.jpg', '05 East firepit — render looks WNW'),
     ('lounge', '05_living.jpg', '06 Lounge — eye level, looks WSW'),
     ('workspace', 'ref_workspace.jpg', '07 Workspace — eye level, looks SE'),
-    ('dining', '07_dining_kitchen.jpg', '08 Kitchen + dining — eye level, looks W'),
+    ('dining', '07_dining_kitchen.jpg', '08 Kitchen + dining — eye level, looks SE'),
     ('roof', '10_green_roof_crop.jpg', '09 Roof opening — looks SE from the NW'),
-    ('hero-interior', '08_threshold.jpg', '10 Living to sea — eye level, looks SSE'),
+    ('hero-interior', '08_threshold.jpg', '10 Living to sea — eye level, looks ESE'),
     ('hero-exterior', 'ref_terrace.jpg', '11 Terrace to sea — eye level, looks ESE'),
 ]
 

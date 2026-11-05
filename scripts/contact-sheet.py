@@ -10,16 +10,16 @@ from PIL import Image, ImageDraw, ImageFont
 ORDER = ['aerial', 'seaward', 'entry', 'west', 'east', 'lounge', 'workspace', 'dining', 'roof',
          'hero-interior', 'hero-exterior']
 LABELS = {
-    'aerial': '01 Seaward aerial (SE, looking NW)',
+    'aerial': '01 Seaward aerial (W, looking E)',
     'seaward': '02 Seaward facade (S, looking N)',
     'entry': '03 North entry (N, looking S)',
     'west': '04 West waterfall (W, looking ENE)',
     'east': '05 East firepit (E, looking WNW)',
     'lounge': '06 Lounge, eye level (looking WSW)',
     'workspace': '07 Workspace, eye level (looking SE)',
-    'dining': '08 Kitchen + dining, eye level (looking SW)',
+    'dining': '08 Kitchen + dining, eye level (looking SE)',
     'roof': '09 Roof opening (NW, looking SE)',
-    'hero-interior': '10 Living to sea (looking SSE)',
+    'hero-interior': '10 Living to sea, eye level (looking ESE)',
     'hero-exterior': '11 Terrace to sea (W, looking ESE)',
 }
 
