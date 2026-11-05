@@ -121,3 +121,72 @@ before the final set:
 Not addressed (would need more than this session): true sculpted rock geometry for
 the cliff (it is a heightfield + instanced boulders), higher‑resolution foliage, an
 L‑sofa that reads as an L from the lounge camera, kitchen dressing variety.
+
+## Photoreal pass (2026‑11‑05)
+
+Brief: push vegetation, rock, materials, light, interiors and water toward the
+photo references; prioritise offline still quality; specialist subagents; blind
+reviews; show 1920×1080 exterior + living room before the full set.
+
+### Specialists (parallel git worktrees, merged with `--no-ff`)
+
+- **Flora:** procedural 2048×4096 leaf atlas with coverage-preserving mips; tree
+  skeletons with LOD (stone/Aleppo pine, holm oak, olive, cypress), maquis
+  shrubs, agaves, trailing cascades, indoor plants; foliage shading with crown
+  normals, thin-leaf transmission and per-card AO.
+- **Geology:** marching-cubes limestone cliff with strata, joints, tafoni and a
+  wave-cut notch; fractured boulders at three scales; rock and terrain materials.
+- **Interior:** furniture and decor rebuilt (L-sofa, nero tables, walnut slat wall
+  and backlit shelving, kitchen, dining), procedural textiles/woods/stone, lamp
+  light pools and a few real 2700 K lights.
+- **Water:** FFT-spectrum sea with shore field, ray-marched pool water with
+  caustics, knife-edge overflow film, layered waterfall with ledges, spray and a
+  plunge basin.
+
+### Integration (this session)
+
+Captured light probes (exterior cube for glass, interior cube with two bounces
+for indoor IBL), window-portal area lights, per-tile stone tiling, shift-lens
+cameras, far-distance aerial perspective, foreground planting for eye-level
+lenses and canopy clearing under elevated lenses.
+
+### HD checkpoint 1 — blind reviews (2 reviewers, 5 views at 1920×1080)
+
+| Axis | A | B |
+|---|---|---|
+| Realism | 4.5 | 4.0 |
+| Lighting & colour | 5.0 | 4.5 |
+| Architecture | 5.0 | 4.5 |
+| Layout consistency | 5.5 | 5.0 |
+| Vegetation & water | 4.0 | 3.5 |
+| **Overall** | **4.8** | **4.3** |
+
+Both ranked the same problems first: pixelated alpha-card foliage (worst in the
+atrium), clay-like rock with contour-line strata, no visible low sun, glass
+without reflections, weak hero compositions, a dark lump on the pool coping,
+"golf-green" hill clearings, white pool basin.
+
+### Fixes after checkpoint 1
+
+- **Stretched views (bug).** three's `setViewOffset()` resets `camera.aspect`
+  to 1. The shift-lens rig called it on every view change, so in the live app
+  every view after the first (and every non-first view of a multi-view render)
+  was horizontally stretched. The rig and the still capture now restore the
+  viewport aspect. This also explains the "missing" sun: it was pushed out of
+  the right edge.
+- **Supersampled stills:** `captureAA(n)` / `--aa=N` averages n Halton-jittered
+  frames in linear light (foliage cards, mullions and glints anti-aliased).
+- **Sun:** clouds thin out around the disc; the hero views now frame the low
+  sun and its glitter path.
+- **Foliage:** atrium planted with green trailing plants and lit by skylight
+  through the oculus; slab-edge cascades mostly green, sparser and clustered;
+  new planting on the cliff benches (seated on the real cliff surface), beds
+  along the outer deck edges and a ring around the firepit terrace.
+- **Rock:** the soil layer of the cliff is capped under the deck and pool (it
+  poked through the coping — the "dark lump"); strata partings broken into
+  short, lighter runs.
+- **Materials:** insulated low-e glazing reflectance; LED soffit lines throw a
+  soft wash onto the slab undersides; pool basin and soffit clad in weathered
+  travertine.
+- **Cameras:** hero-exterior, hero-interior and dining reframed after refs 03,
+  08 and 07 (see RECONCILIATION.md 14–15); lounge shifted up.

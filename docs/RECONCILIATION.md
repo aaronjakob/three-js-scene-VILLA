@@ -74,6 +74,20 @@ geometry is authored in GLB plan coordinates (`src/villa/architecture/plan.js`).
 13. **Per‑view exposure.** Each view carries an exposure compensation (±0.6 EV), as a
     photographer meters each shot; the scene lighting itself is identical for all
     views.
+14. **Hero framings (photoreal pass).** Both hero views now follow the photo
+    compositions instead of the first blockout cameras:
+    - `hero-exterior` stands on the west deck under the upper-floor canopy and looks
+      east‑south‑east along the pool (refs 03 and the terrace render): curved glass
+      and the living room on the left, the soffit with its LED line overhead, the pool,
+      the sea and the low sun (with its glitter path) on the right.
+    - `hero-interior` stands inside the west end of the living room and looks along the
+      curved glass line (ref 08): sofa on the left, kitchen deep in the frame, pool and
+      sea through the glass on the right, sun in frame.
+    The sun itself was not moved (146° / 7.5°); the cameras were turned toward it.
+15. **Dining framing.** The first eye‑level dining camera stood in the kitchen and
+    looked west across an empty floor. It now stands north‑west of the table looking
+    south‑east (ref 07): island on the left, round table and pendant ring in the
+    centre, glass and the low sun behind.
 
 ## Not taken from the photos
 
