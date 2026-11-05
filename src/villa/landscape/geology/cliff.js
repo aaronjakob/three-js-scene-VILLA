@@ -167,6 +167,9 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
   // --- 2D column pass ------------------------------------------------------------
   const hf = new Float32Array(NC);
   const hbase = new Float32Array(NC);
+  // ceiling for the soil/base layer under the deck and the pool (it must never
+  // break through the slab, the coping or the basin)
+  const baseCap = new Float32Array(NC).fill(99);
   const hmax = new Float32Array(NC);
   const wDom = new Float32Array(NC);
   const cap = new Float32Array(NC);
@@ -204,6 +207,7 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
       let cz = Math.abs(x) < 32 ? 17.45 - 0.7 * Math.abs(nzB.noise2(x / 4.5, y / 4.5)) : 40;
       if (pointInPoly(x, y, deck)) cz = Math.min(cz, 17.3);
       if (pointInPoly(x, y, pool)) cz = Math.min(cz, 15.35);
+      baseCap[c] = cz;
       const st = stairProj(x, y);
       if (st.d < 3.6) cz = Math.min(cz, st.z - 0.6 + 6 * smoothstep(1.8, 3.6, st.d));
       const fd = Math.hypot(x - FIREPIT.cx, y - FIREPIT.cy);
@@ -263,6 +267,7 @@ export function buildCliff({ field, terrainMesh, quality = {} }) {
   for (let c = 0; c < NC; c++) {
     cover[c] *= wDom[c];
     hbase[c] = lerp(hbase[c], hmax[c], smoothstep(0.0, 0.3, cover[c]));
+    hbase[c] = Math.min(hbase[c], baseCap[c]);
   }
   // terrain push-down mask (0.5 m texels) for the terrain vertex stage
   const mStep = Math.max(1, Math.round(0.5 / vs));

@@ -146,7 +146,11 @@ export class CameraRig {
       cam.lookAt(pos.x + d.x, pos.y, pos.z + d.z);
       const tanHalf = Math.tan(THREE.MathUtils.degToRad(fov / 2));
       const shift = -(Math.tan(pitch) / tanHalf) * 0.5; // fraction of frame height
+      // setViewOffset() silently resets the aspect to fullWidth / fullHeight (= 1);
+      // keep the viewport's aspect or every view after the first is stretched
+      const aspect = cam.aspect;
       cam.setViewOffset(1, 1, 0, shift, 1, 1);
+      cam.aspect = aspect;
     } else {
       cam.lookAt(target);
       if (cam.view?.enabled) cam.clearViewOffset();

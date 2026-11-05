@@ -364,6 +364,57 @@ async function buildLive(container, options, gpu, q, cleanup) {
       renderFrame(0);
       return canvas.toDataURL(type, quality);
     },
+    // Offline stills: average `samples` frames rendered with Halton sub-pixel
+    // jitter (in linear light), i.e. supersampled anti-aliasing for foliage
+    // cards, mullions and water glints. The camera's own view offset (shift
+    // lens) is preserved.
+    captureAA(samples = 4, type = 'image/png', quality) {
+      if (samples <= 1) return this.capture(type, quality);
+      const gl = renderer.getContext();
+      const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+      const acc = new Float32Array(w * h * 3);
+      const px = new Uint8Array(w * h * 4);
+      const toLin = new Float32Array(256);
+      for (let i = 0; i < 256; i++) { const c = i / 255; toLin[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+      const view = camera.view && camera.view.enabled ? { ...camera.view } : null;
+      const aspect = camera.aspect; // setViewOffset() resets it to fullWidth / fullHeight
+      const halton = (i, b) => { let f = 1, r = 0; while (i > 0) { f /= b; r += f * (i % b); i = Math.floor(i / b); } return r; };
+      for (let s = 0; s < samples; s++) {
+        const jx = halton(s + 1, 2) - 0.5, jy = halton(s + 1, 3) - 0.5;
+        if (view) camera.setViewOffset(view.fullWidth, view.fullHeight, view.offsetX + (jx / w) * view.fullWidth, view.offsetY + (jy / h) * view.fullHeight, view.width, view.height);
+        else camera.setViewOffset(1, 1, jx / w, jy / h, 1, 1);
+        camera.aspect = aspect;
+        camera.updateProjectionMatrix();
+        renderFrame(0);
+        renderer.setRenderTarget(null);
+        gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px);
+        for (let i = 0, j = 0; i < px.length; i += 4, j += 3) {
+          acc[j] += toLin[px[i]]; acc[j + 1] += toLin[px[i + 1]]; acc[j + 2] += toLin[px[i + 2]];
+        }
+      }
+      if (view) camera.setViewOffset(view.fullWidth, view.fullHeight, view.offsetX, view.offsetY, view.width, view.height);
+      else camera.clearViewOffset();
+      camera.aspect = aspect;
+      camera.updateProjectionMatrix();
+      const c2 = document.createElement('canvas');
+      c2.width = w; c2.height = h;
+      const ctx2 = c2.getContext('2d');
+      const img = ctx2.createImageData(w, h);
+      const inv = 1 / samples;
+      for (let y = 0; y < h; y++) {
+        const src = (h - 1 - y) * w * 3, dst = y * w * 4;
+        for (let x = 0; x < w; x++) {
+          for (let k = 0; k < 3; k++) {
+            const l = acc[src + x * 3 + k] * inv;
+            const e = l <= 0.0031308 ? l * 12.92 : 1.055 * Math.pow(l, 1 / 2.4) - 0.055;
+            img.data[dst + x * 4 + k] = Math.max(0, Math.min(255, Math.round(e * 255)));
+          }
+          img.data[dst + x * 4 + 3] = 255;
+        }
+      }
+      ctx2.putImageData(img, 0, 0);
+      return c2.toDataURL(type, quality);
+    },
     stats() {
       const info = renderer.info;
       let tris = 0, instances = 0;
@@ -389,7 +440,7 @@ async function buildLive(container, options, gpu, q, cleanup) {
       };
     },
     debugMarkers(on) { ctx.debugGroup && (ctx.debugGroup.visible = on); invalidate(); },
-    scene, camera, renderer, rig, field,
+    scene, camera, renderer, rig, field, THREE,
     dispose() {
       running = false;
       cancelAnimationFrame(raf);

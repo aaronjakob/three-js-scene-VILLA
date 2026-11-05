@@ -75,6 +75,10 @@ export function buildVilla(ctx) {
   root.add(new THREE.Mesh(tubeAlong(coveL1, LEVEL.upper - 0.35, 0.022, { closed: true, tubular: 600, radial: 5 }), M.led));
   root.add(new THREE.Mesh(tubeAlong(coveRoof, LEVEL.roof - 0.33, 0.02, { closed: true, tubular: 520, radial: 5 }), M.led));
   void coveL1Open;
+  // the light wash the cove throws onto the soffit around each line
+  const wash = new THREE.MeshBasicMaterial({ name: 'led-wash', vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, fog: false, side: THREE.DoubleSide });
+  root.add(new THREE.Mesh(washRibbon(coveL1, LEVEL.upper - 0.343, 0.5, 0.75), wash));
+  root.add(new THREE.Mesh(washRibbon(coveRoof, LEVEL.roof - 0.323, 0.45, 0.7), wash));
 
   // warm cove line in the ceiling just inside the glass (indirect wash)
   root.add(new THREE.Mesh(tubeAlong(offset(enclosure, -0.5), LEVEL.upper - T1 - 0.02, 0.014, { closed: true, tubular: 520, radial: 5 }), M.ledSoft));
@@ -493,3 +497,34 @@ function plinthStrip(pts0, base0, top) {
 }
 
 export { COURT, DRIVE_PTS };
+
+// Soft additive light wash on a soffit around an LED line: five rows of
+// vertices across the band, brightest on the line, fading to zero at the edges.
+function washRibbon(outline, z, halfW, peak) {
+  const warm = new THREE.Color(1.0, 0.62, 0.3);
+  const rows = [[-1, 0], [-0.4, 0.2], [0, 1], [0.4, 0.2], [1, 0]];
+  const pos = [], col = [], idx = [];
+  const n = outline.length;
+  for (let i = 0; i < n; i++) {
+    const a = outline[(i - 1 + n) % n], b = outline[(i + 1) % n], p = outline[i];
+    const tx = b.x - a.x, ty = b.y - a.y, tl = Math.hypot(tx, ty) || 1;
+    const nx = ty / tl, ny = -tx / tl;
+    for (const [o, w] of rows) {
+      pos.push(p.x + nx * o * halfW, z, -(p.y + ny * o * halfW));
+      col.push(warm.r * w * peak, warm.g * w * peak, warm.b * w * peak);
+    }
+  }
+  const R = rows.length;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    for (let r = 0; r < R - 1; r++) {
+      const a = i * R + r, b = j * R + r;
+      idx.push(a, b, a + 1, b, b + 1, a + 1);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  g.setIndex(idx);
+  return g;
+}

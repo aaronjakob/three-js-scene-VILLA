@@ -101,6 +101,8 @@ vec3 vh_sky(vec3 d, bool withSun) {
     col -= vec3(1.0, 0.90, 0.62) * smoothstep(0.99994, 0.99997, mu) * 12.0;
   }
   vec4 cl = vh_clouds(dir);
+  // the low sun sits in a clear gap: clouds thin out around the disc
+  cl.a *= 1.0 - 0.9 * smoothstep(0.9975, 0.9998, dot(dir, uSunDir));
   col = mix(col, cl.rgb * (0.6 + 0.4 * vh_skyBase(normalize(dir + vec3(0.0, 0.4, 0.0))).b / 0.7), cl.a);
   // below horizon (used by env map): dark marine blue-grey
   col = mix(col, vec3(0.20, 0.205, 0.20), smoothstep(0.0, 0.08, below));
@@ -129,12 +131,12 @@ float vh_interiorK(vec3 w) {
   }
   // atrium shaft: open to the sky through the oculus, so its walls and planting
   // see daylight from above (more of it the higher up the shaft)
-  if (w.y > 21.9 && w.y < 29.5) {
+  if (w.y > 21.3 && w.y < 29.5) {
     vec2 d = g - vec2(-4.1, -0.6);
     float cr = cos(0.1), sr = sin(0.1);
     vec2 q = vec2(cr * d.x + sr * d.y, -sr * d.x + cr * d.y);
     float ea = length(q / vec2(3.75, 2.5));
-    float ks = mix(0.88, 1.0, smoothstep(22.2, 27.8, w.y));
+    float ks = mix(0.93, 1.0, smoothstep(22.2, 27.8, w.y));
     k = max(k, mix(ks, k, smoothstep(0.96, 1.08, ea)));
   }
   return k;

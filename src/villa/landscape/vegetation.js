@@ -251,7 +251,7 @@ export function buildVegetation(ctx) {
   // deck planters (olives in stone planters) on the terraces
   const planterGeo = [];
   const M = materials(quality);
-  for (const [x, y, s] of [[-19.4, -5.6, 0.75], [18.6, -6.0, 0.8], [-14.6, 9.6, 0.7]]) {
+  for (const [x, y, s] of [[-19.6, 2.4, 0.75], [18.6, -6.0, 0.8], [-14.6, 9.6, 0.7]]) {
     const pg = new THREE.LatheGeometry([new THREE.Vector2(0, 0), new THREE.Vector2(0.75, 0), new THREE.Vector2(0.85, 0.7), new THREE.Vector2(0.78, 0.72), new THREE.Vector2(0.7, 0.62), new THREE.Vector2(0, 0.62)], 48);
     pg.translate(x, LEVEL.main, -y);
     planterGeo.push(pg);
@@ -443,6 +443,41 @@ export function buildVegetation(ctx) {
           push(`cascL-${vi}`, cascGreen[vi], leafMat, m, new THREE.Color(g, g * (0.98 + rng() * 0.06), g * (0.88 + rng() * 0.1)), false, true);
         }
       }
+    }
+  }
+
+  // --- planted beds along the outer deck edges (refs 03/04: lavender, rosemary
+  // and grasses soften every terrace edge; no bare soil next to the stone) -----
+  {
+    const edge = resample([...ccw(deck), ccw(deck)[0]], 0.7);
+    const gnd = (x, y) => (geo?.cliff?.inZone(x, y) ? geo.surfaceHeight(x, y) ?? field.height(x, y) : field.height(x, y));
+    const BED = ['lavender', 'lavender', 'rosemary', 'grassA', 'grassB', 'myrtle', 'flowersW', 'cushion'];
+    for (let i = 0; i < edge.length - 1; i++) {
+      const p = edge[i], q = edge[i + 1];
+      const tx = q.x - p.x, ty = q.y - p.y, tl = Math.hypot(tx, ty) || 1;
+      const ox = ty / tl, oy = -tx / tl; // outward for a CCW outline
+      for (let k = 0; k < 2; k++) {
+        const d = 0.35 + rng() * 1.5;
+        const x = p.x + ox * d + (tx / tl) * (rng() - 0.5) * 0.7;
+        const y = p.y + oy * d + (ty / tl) * (rng() - 0.5) * 0.7;
+        if (pointInPoly(x, y, deck) || pointInPoly(x, y, poolPad)) continue;
+        if (Math.hypot(x - COURT.cx, y - COURT.cy) < COURT.r + 0.6) continue;
+        if (y > 20 && polyProject(DRIVE_PTS, x, y).d < 4.2) continue;
+        if (polyProject(FIRE_STAIR_PTS, x, y).d < 1.6 || Math.hypot(x + 10.6, y + 14.2) < 3.0) continue;
+        const z = gnd(x, y);
+        if (z == null || z > LEVEL.main + 0.6 || z < LEVEL.main - 2.6) continue;
+        if (nz.fbm2(x / 3.5 + 1.7, y / 3.5, 2) < -0.35) continue;
+        placeShrub(BED[Math.floor(rng() * BED.length)], x, y, z, 0.45 + rng() * 0.4);
+      }
+    }
+    // the lower firepit terrace sits in a ring of maquis and grasses (ref 04)
+    for (let i = 0; i < 150; i++) {
+      const a = rng() * Math.PI * 2, r = FIREPIT.r + 0.45 + rng() * 1.6;
+      const x = FIREPIT.cx + Math.cos(a) * r, y = FIREPIT.cy + Math.sin(a) * r;
+      if (polyProject(FIRE_STAIR_PTS, x, y).d < 1.5 || pointInPoly(x, y, poolPad)) continue;
+      const z = gnd(x, y);
+      if (z == null || z > FIREPIT.z + 0.4 || z < FIREPIT.z - 3.0) continue;
+      placeShrub(['rosemary', 'lentisk', 'grassB', 'lavender', 'myrtle', 'grassA'][Math.floor(rng() * 6)], x, y, z, 0.5 + rng() * 0.45);
     }
   }
 

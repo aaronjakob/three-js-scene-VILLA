@@ -36,7 +36,8 @@ export function createGlassMaterial({ tint = 0.06, reflect = 1.0 } = {}) {
         vec3 N = normalize(vN);
         if (dot(N, V) > 0.0) N = -N;
         float c = clamp(dot(-V, N), 0.0, 1.0);
-        float F = 0.04 + 0.96 * pow(1.0 - c, 5.0);
+        // insulated low-e glazing: four faces + coating reflect ~9 % at normal incidence
+        float F = 0.09 + 0.91 * pow(1.0 - c, 5.0);
         vec3 R = reflect(V, N);
         // looking down at the glass from outside reflects the ground/sea: darken lower hemisphere
         vec3 sky;

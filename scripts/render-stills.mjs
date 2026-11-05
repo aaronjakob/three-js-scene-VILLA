@@ -27,6 +27,8 @@ const H = Number(args.h ?? 1080);
 const out = path.resolve(args.out ?? 'renders');
 const quality = args.quality ?? 'still';
 const extra = args.extra ?? '';
+// --aa=N: supersample each still with N jittered frames (session mode)
+const aa = Math.max(1, Number(args.aa ?? 1));
 await mkdir(out, { recursive: true });
 
 let server = null;
@@ -71,15 +73,16 @@ try {
     for (let i = 0; i < views.length; i++) {
       const [vname, cam] = views[i].split('@');
       const t1 = Date.now();
-      const data = await page.evaluate(({ vname, cam, first }) => {
+      const data = await page.evaluate(({ vname, cam, first, aa }) => {
         const V = window.__villa;
         if (!first) {
           if (cam) V.setFreeCamera(cam.split(',').map(Number));
           else V.setView(vname, { instant: true });
+          if (aa > 1) return V.captureAA(aa);
           V.renderNow(0);
-        }
+        } else if (aa > 1) return V.captureAA(aa);
         return document.querySelector('canvas').toDataURL('image/png');
-      }, { vname, cam, first: i === 0 });
+      }, { vname, cam, first: i === 0, aa });
       const file = fileFor(vname, cam);
       await writeFile(file, Buffer.from(data.split(',')[1], 'base64'));
       const secs = ((Date.now() - (i === 0 ? t0 : t1)) / 1000).toFixed(1);

@@ -72,6 +72,9 @@ GrSurf gr_limestone(vec3 p, vec3 n, float zs, float hard, float ao, float sh, fl
   float pz = zs * 2.1 + 0.35 * vh_noise3(p * vec3(0.18, 0.0, 0.18));
   float part = abs(vh_noise3(vec3(p.x * 0.03, pz, p.z * 0.03)));
   float parting = (1.0 - smoothstep(0.0, 0.035 + 0.05 * (1.0 - near), part)) * smoothstep(0.15, 0.6, vert) * mid;
+  // partings are discontinuous in real limestone: break them into short runs so
+  // they never read as drawn contour lines
+  parting *= smoothstep(-0.05, 0.4, vh_noise3(p * vec3(0.11, 0.35, 0.11) + 7.0));
   // hairline fractures (mostly vertical): cellular edges in squashed space
   float hair = 0.0;
   if (near > 0.01) {
@@ -107,7 +110,7 @@ GrSurf gr_limestone(vec3 p, vec3 n, float zs, float hard, float ao, float sh, fl
   c *= mix(1.0, 0.42, smoothstep(0.05, 0.6, cav));
   float moss = smoothstep(0.15, 0.55, cav + jc * 0.4) * smoothstep(-0.2, 0.5, n.y) * smoothstep(2.5, 4.0, p.y);
   c = mix(c, vec3(0.085, 0.095, 0.045), moss * 0.55);
-  c *= 1.0 - parting * 0.5;
+  c *= 1.0 - parting * 0.3;
   c *= 1.0 - hair * 0.45;
   c *= 0.92 + 0.16 * rough;
   c *= 1.0 - pits * 0.18;
