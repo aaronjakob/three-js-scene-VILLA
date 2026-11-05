@@ -190,3 +190,28 @@ without reflections, weak hero compositions, a dark lump on the pool coping,
   travertine.
 - **Cameras:** hero-exterior, hero-interior and dining reframed after refs 03,
   08 and 07 (see RECONCILIATION.md 14–15); lounge shifted up.
+
+### HD checkpoint 2 — fresh blind reviewers (6 views, supersampled)
+
+| Axis | C | D |
+|---|---|---|
+| Realism | 4.5 | 4.0 |
+| Lighting & colour | 5.0 | 5.0 |
+| Architecture | 5.5 | 4.0 |
+| Layout consistency | 6.5 | 6.0 |
+| Vegetation & water | 4.5 | 3.0 |
+| **Overall** | **5.2** | **4.4** |
+
+Both called hero-interior the strongest frame ("close to ref 08") and still put
+foliage first: hanging alpha-card strands near the lens and the atrium sprigs.
+Fixed before the final set: far-sea boulders without surf (read as floating),
+the low-resolution sun ghost on glass, near-lens slab cascades (9 m clear of
+eye-level lenses), the oculus-rim sprigs, square tear holes in the strelitzia,
+tan ceiling cast, mirror-like slate-blue mullions, floor sun reflection clamp,
+warmer/brighter lamps, pale-yellow sun disc.
+
+Not addressed (would change the approved architecture or need more than this
+session): slab massing ("stacked drum"), pool basin depth/shape vs. the plan's
+crescent, a shallow atrium open to the sky (the upper floor makes it a shaft),
+a translucent multi-tier waterfall, sculpted fractured rock geometry, and a new
+high-resolution leaf painter for trailing plants.
