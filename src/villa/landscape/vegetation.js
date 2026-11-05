@@ -378,9 +378,10 @@ export function buildVegetation(ctx) {
   // into the atrium (seen from the living room)
   const shaftRing = ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.04, ATRIUM.ry - 0.04, 64, ATRIUM.rot)).reverse();
   // only a few sprigs at the oculus rim: it sits close to the living-room lenses
-  vineAlong(shaftRing, LEVEL.upper - 0.6, 0.05, 1.1, null, cascGreen, 'cascG', 0.45);
+  vineAlong(shaftRing, LEVEL.upper - 0.6, 0.25, 1.1, null, cascGreen, 'cascG', 0.45);
   // shaft ring is clockwise, so `out` points into the shaft: keep the planting inside the wall
-  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, 0.06, 0.55, null, cascGreen, 'cascA', 0.05);
+  // inset well inside the shaft so no card corner pokes through its wall
+  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, 0.32, 0.55, null, cascGreen, 'cascA', 0.05);
   // the roof lip around the opening spills greenery into the shaft
   vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, cascGreen, 'cascR', -0.05);
 
@@ -456,8 +457,8 @@ export function buildVegetation(ctx) {
       const p = edge[i], q = edge[i + 1];
       const tx = q.x - p.x, ty = q.y - p.y, tl = Math.hypot(tx, ty) || 1;
       const ox = ty / tl, oy = -tx / tl; // outward for a CCW outline
-      for (let k = 0; k < 2; k++) {
-        const d = 0.35 + rng() * 1.5;
+      for (let k = 0; k < 4; k++) {
+        const d = 0.35 + (k < 2 ? rng() * 1.5 : 1.5 + rng() * 2.4);
         const x = p.x + ox * d + (tx / tl) * (rng() - 0.5) * 0.7;
         const y = p.y + oy * d + (ty / tl) * (rng() - 0.5) * 0.7;
         if (pointInPoly(x, y, deck) || pointInPoly(x, y, poolPad)) continue;
