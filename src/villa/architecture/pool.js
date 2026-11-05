@@ -1,164 +1,49 @@
 import * as THREE from 'three';
 import { LEVEL } from '../core/world.js';
-import { atmosphereUniforms, GLSL_SKY, GLSL_HAZE, hazeUniforms } from '../render/atmosphere.js';
+import { atmosphereUniforms } from '../render/atmosphere.js';
 import { offset, ellipse, resample, pointInPoly, FIREPIT, FIRE_STAIR_PTS, smooth, WATERFALL_SPILL } from './plan.js';
-import { slabGeometry, capGeometry, stripGeometry, sweepRect, merge, box, tubeAlong } from './geo.js';
+import { slabGeometry, capGeometry, sweepRect, merge, box, tubeAlong } from './geo.js';
 import { polyProject } from '../landscape/terrain.js';
-import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { createPoolWaterMaterial as createRayTracedWater, overflowFilmMaterial } from '../water/poolWater.js';
+import { buildCascade } from '../water/cascade.js';
 
 const WATER_Z = 17.962;
+const FLOOR_Z = 16.75;
+const GUTTER_Z = 17.3; // water level in the catch channel below the infinity edge
 const V2 = (x, y) => new THREE.Vector2(x, y);
 
-// ---------------------------------------------------------------------------
-// Pool water: ripple normals, planar reflection (if available) or analytic
-// sky, Fresnel, turquoise body; alpha lets the lit pool floor show through.
-// ---------------------------------------------------------------------------
-const waterVert = /* glsl */ `
-varying vec3 vWorld;
-varying vec4 vReflCoord;
-uniform mat4 uReflMatrix;
-void main() {
-  vec4 w = modelMatrix * vec4(position, 1.0);
-  vWorld = w.xyz;
-  vReflCoord = uReflMatrix * w;
-  gl_Position = projectionMatrix * viewMatrix * w;
+// Pool water material (ray-traced interior; see water/poolWater.js). Keeps the
+// planar-reflection contract: uniforms tRefl / uHasRefl / uReflMatrix.
+export function createPoolWaterMaterial(opts = {}) {
+  return createRayTracedWater(opts);
 }
-`;
-const waterFrag = /* glsl */ `
-${GLSL_SKY}
-${GLSL_HAZE}
-uniform sampler2D tRefl;
-uniform float uHasRefl;
-varying vec3 vWorld;
-varying vec4 vReflCoord;
-void main() {
-  vec3 P = vWorld;
-  vec3 V = normalize(P - cameraPosition);
-  vec2 q = P.xz;
-  float t = uTime;
-  float h1 = vh_noise3(vec3(q * 1.7, t * 0.35));
-  float h2 = vh_noise3(vec3(q * 4.3 + 7.0, t * 0.6));
-  vec2 sl = vec2(
-    vh_noise3(vec3(q * 1.3 + 3.1, t * 0.3)),
-    vh_noise3(vec3(q * 1.3 - 5.7, t * 0.3))) * 0.045 +
-    vec2(vh_noise3(vec3(q * 3.7, t * 0.55)), vh_noise3(vec3(q * 3.7 + 11.0, t * 0.55))) * 0.02;
-  vec3 N = normalize(vec3(sl.x, 1.0, sl.y));
-  float cosT = clamp(dot(-V, N), 0.0, 1.0);
-  float F = 0.02 + 0.98 * pow(1.0 - cosT, 5.0);
-  vec3 R = reflect(V, N);
-  R.y = max(R.y, 0.01);
-  vec3 refl = vh_sky(normalize(R), true) * 0.95;
-  if (uHasRefl > 0.5) {
-    vec2 uv = vReflCoord.xy / vReflCoord.w + sl * 0.35;
-    vec4 rc = texture2D(tRefl, uv);
-    refl = mix(refl, rc.rgb, rc.a);
+
+// one strip between two profile rings, smooth along the outline, crisp across
+function ringStrip(rings, a, b, n, closed = true) {
+  const pos = [], uv = [], idx = [];
+  const m = closed ? n + 1 : n;
+  let acc = 0;
+  for (let i = 0; i < m; i++) {
+    const k = i % n;
+    if (i > 0) {
+      const p = rings[a][k], q = rings[a][(i - 1) % n];
+      acc += Math.hypot(p[0] - q[0], p[1] - q[1]);
+    }
+    const A = rings[a][k], B = rings[b][k];
+    const vd = Math.hypot(A[0] - B[0], A[1] - B[1], A[2] - B[2]);
+    pos.push(A[0], A[2], -A[1], B[0], B[2], -B[1]);
+    uv.push(acc, 0, acc, vd);
   }
-  float sun = pow(max(dot(R, uSunDir), 0.0), 900.0) * 30.0;
-  vec3 body = vec3(0.04, 0.36, 0.42);
-  float alpha = mix(0.38, 1.0, F);
-  vec3 col = body * (1.0 - F) * 0.55 + refl * F + vec3(1.0, 0.9, 0.7) * sun;
-  col = vh_applyHaze(col, P, cameraPosition);
-  gl_FragColor = vec4(col / max(alpha, 0.001), alpha);
-  gl_FragColor.rgb *= 1.0;
-  void(h1); void(h2);
-}
-`.replace('void(h1); void(h2);', '');
-
-export function createPoolWaterMaterial() {
-  return new THREE.ShaderMaterial({
-    name: 'PoolWater',
-    uniforms: {
-      ...atmosphereUniforms,
-      ...hazeUniforms,
-      tRefl: { value: null },
-      uHasRefl: { value: 0 },
-      uReflMatrix: { value: new THREE.Matrix4() },
-    },
-    vertexShader: waterVert,
-    fragmentShader: waterFrag,
-    transparent: true,
-    depthWrite: false,
-    fog: false,
-  });
-}
-
-// pool floor / inner walls: pale tile with animated caustics, lit from within
-function poolFloorMaterial() {
-  const m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(0.55, 0.80, 0.80),
-    roughness: 0.4,
-    emissive: new THREE.Color(0.10, 0.42, 0.44),
-    emissiveIntensity: 0.55,
-  });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uTime = atmosphereUniforms.uTime;
-    sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vPW;')
-      .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvPW = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', `#include <common>
-varying vec3 vPW;
-uniform float uTime;
-vec2 ch(vec2 p) { return fract(sin(vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)))) * 43758.5453); }
-float caustic(vec2 p) {
-  vec2 i = floor(p), f = fract(p);
-  float d1 = 8.0, d2 = 8.0;
-  for (int y = -1; y <= 1; y++) for (int x = -1; x <= 1; x++) {
-    vec2 g = vec2(float(x), float(y));
-    vec2 o = ch(i + g);
-    o = 0.5 + 0.45 * sin(uTime * 0.7 + 6.2831 * o);
-    float d = length(g + o - f);
-    if (d < d1) { d2 = d1; d1 = d; } else if (d < d2) d2 = d;
+  for (let i = 0; i < m - 1; i++) {
+    const p = i * 2;
+    idx.push(p, p + 2, p + 1, p + 1, p + 2, p + 3);
   }
-  return smoothstep(0.0, 0.12, d2 - d1);
-}`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-{
-  vec2 cp = vPW.xz * 1.15;
-  float c = 1.0 - caustic(cp) * caustic(cp * 1.7 + 3.3);
-  // tile grid
-  vec2 g = abs(fract(vPW.xz / 0.1) - 0.5);
-  float grout = smoothstep(0.46, 0.5, max(g.x, g.y));
-  diffuseColor.rgb *= 1.0 - grout * 0.12;
-  totalEmissiveRadiance += vec3(0.55, 0.85, 0.85) * pow(c, 3.0) * 0.55;
-}`);
-  };
-  m.customProgramCacheKey = () => 'pool-floor';
-  return m;
-}
-
-// thin water sheet: infinity overflow and waterfall
-function sheetMaterial({ speed = 1.4, density = 6.0, opacity = 0.75, tint = [0.82, 0.93, 0.95] } = {}) {
-  return new THREE.ShaderMaterial({
-    name: 'WaterSheet',
-    uniforms: { ...atmosphereUniforms, uSpeed: { value: speed }, uDensity: { value: density }, uOpacity: { value: opacity }, uTint: { value: new THREE.Color(...tint) } },
-    vertexShader: /* glsl */ `
-      varying vec2 vUv; varying vec3 vW;
-      void main(){ vUv = uv; vec4 w = modelMatrix * vec4(position,1.0); vW = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`,
-    fragmentShader: /* glsl */ `
-      ${GLSL_SKY}
-      uniform float uSpeed; uniform float uDensity; uniform float uOpacity; uniform vec3 uTint;
-      varying vec2 vUv; varying vec3 vW;
-      void main(){
-        float t = uTime * uSpeed;
-        float s1 = vh_noise3(vec3(vUv.x * uDensity * 6.0, vUv.y * 1.2 + t, 0.3));
-        float s2 = vh_noise3(vec3(vUv.x * uDensity * 15.0, vUv.y * 3.0 + t * 1.6, 1.7));
-        float streak = smoothstep(-0.25, 0.55, s1 * 0.7 + s2 * 0.5);
-        float edge = smoothstep(0.0, 0.08, vUv.x) * smoothstep(1.0, 0.92, vUv.x);
-        float foamBottom = smoothstep(0.75, 1.0, vUv.y);
-        vec3 V = normalize(vW - cameraPosition);
-        vec3 sky = vh_sky(reflect(V, vec3(0.0, 0.0, 1.0)) * vec3(1.0, 1.0, 1.0), false);
-        vec3 c = mix(uTint * 0.55, uTint * 1.25, streak) + sky * 0.12;
-        c += vec3(1.0) * foamBottom * 0.4;
-        float a = uOpacity * (0.35 + 0.65 * streak) * edge;
-        a = max(a, foamBottom * 0.6 * edge);
-        gl_FragColor = vec4(c, a);
-      }`,
-    transparent: true,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-    fog: false,
-  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx);
+  g.computeVertexNormals();
+  return g;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,9 +58,8 @@ export function buildPool(ctx, root, M, plan) {
     return m;
   };
 
-  // outward normals per sample (pool is CCW after smooth? enforce)
+  // outward normals per sample (pool outline is CCW)
   const inner = pool;
-  const outer = offset(inner, 0.34);
   const n = inner.length;
   // spill point: pool sample nearest the waterfall anchor; outward normal there
   const SP = V2(...WATERFALL_SPILL);
@@ -190,183 +74,151 @@ export function buildPool(ctx, root, M, plan) {
   }
   const isSpill = inner.map((p) => p.distanceTo(TIP) < 1.35);
   const isInfinity = inner.map((p, i) => normals[i].y < -0.3 && !isSpill[i] && Math.abs(p.x) < 13.6);
+  // knife-edge weight, eased along the outline so coping and weir meet softly
+  const raw = inner.map((_, i) => (isInfinity[i] || isSpill[i] ? 1 : 0));
+  const knife = raw.map((_, i) => {
+    let s = 0, w = 0;
+    for (let k = -3; k <= 3; k++) { const wk = 4 - Math.abs(k); s += raw[(i + k + n) % n] * wk; w += wk; }
+    const v = s / w;
+    return v * v * (3 - 2 * v);
+  });
+  const sky = ctx.scene?.getObjectByName?.('ocean')?.material?.uniforms?.tSky?.value ?? null;
 
-  // --- tub: ring wall with per-sample rim height --------------------------
+  // --- tub: slim crisp coping on the deck side, knife edge on the sea side --
   {
-    const zb = 16.35;
-    const pos = [];
-    const idx = [];
-    const uv = [];
-    const rimTop = (i) => (isInfinity[i] || isSpill[i] ? WATER_Z - 0.006 : LEVEL.main + 0.025);
-    // rings: 0 inner-top, 1 outer-top, 2 outer-bottom, 3 inner-floor
-    for (let i = 0; i <= n; i++) {
-      const k = i % n;
-      const pi = inner[k], po = outer[k];
-      const zt = rimTop(k);
-      pos.push(pi.x, zt, -pi.y, po.x, zt, -po.y, po.x, zb, -po.y, pi.x, 16.75, -pi.y);
-      const s = i * 0.25;
-      uv.push(s, 0, s, 0.34, s, 1.7, s, 1.2);
-    }
+    const L = THREE.MathUtils.lerp;
+    const zc = LEVEL.main + 0.012;
+    const rings = [[], [], [], [], [], [], []];
     for (let i = 0; i < n; i++) {
-      const a = i * 4, b = (i + 1) * 4;
-      // top
-      idx.push(a, b, a + 1, a + 1, b, b + 1);
-      // outer face
-      idx.push(a + 1, b + 1, a + 2, a + 2, b + 1, b + 2);
-      // inner face (handled by tile strip, keep a backing face)
-      idx.push(a + 3, b + 3, a, a, b + 3, b);
+      const b = knife[i];
+      const p = inner[i], nr = normals[i];
+      const at = (o, z) => [p.x + nr.x * o, p.y + nr.y * o, z];
+      const wTop = L(0.2, 0.045, b);
+      rings[0].push(at(0, L(zc - 0.012, WATER_Z - 0.016, b)));
+      rings[1].push(at(L(0.012, 0.004, b), L(zc, WATER_Z - 0.004, b)));
+      rings[2].push(at(wTop - L(0.01, 0.012, b), L(zc, WATER_Z - 0.006, b)));
+      rings[3].push(at(wTop, L(zc - 0.01, WATER_Z - 0.02, b)));
+      rings[4].push(at(wTop, L(17.75, GUTTER_Z, b)));
+      rings[5].push(at(wTop, 16.35));
+      rings[6].push(at(0, FLOOR_Z));
     }
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
-    g.setIndex(idx);
-    const ng = g.toNonIndexed();
-    ng.computeVertexNormals();
-    const tub = add(ng, M.slab, { name: 'pool-tub' });
-    tub.material = M.slab.clone();
-    tub.material.side = THREE.DoubleSide;
+    const coping = merge([ringStrip(rings, 0, 1, n), ringStrip(rings, 1, 2, n), ringStrip(rings, 2, 3, n)]);
+    add(coping, M.deck, { name: 'pool-coping' });
+    // outer face: dark wet stone under the overflow film, plain slab elsewhere
+    const face = ringStrip(rings, 3, 4, n);
+    const idx = face.index.array;
+    const wet = [], dry = [];
+    for (let q = 0; q < idx.length; q += 6) {
+      const i = q / 6;
+      (knife[i % n] > 0.5 && knife[(i + 1) % n] > 0.5 ? wet : dry).push(...idx.slice(q, q + 6));
+    }
+    face.setIndex([...dry, ...wet]);
+    face.clearGroups();
+    face.addGroup(0, dry.length, 0);
+    face.addGroup(dry.length, wet.length, 1);
+    const wetStone = new THREE.MeshPhysicalMaterial({
+      name: 'overflow-stone',
+      color: new THREE.Color(0.075, 0.09, 0.09),
+      roughness: 0.32,
+      clearcoat: 1.0,
+      clearcoatRoughness: 0.08,
+      envMapIntensity: 0.9,
+    });
+    add(face, [M.slab, wetStone], { name: 'pool-overflow-face' });
+    const lower = merge([ringStrip(rings, 4, 5, n), ringStrip(rings, 5, 6, n), ringStrip(rings, 6, 0, n)]);
+    add(lower, M.slab, { name: 'pool-tub' });
     // sculpted soffit under the cantilever
-    add(slabGeometry(offset(inner, 0.32), [], 16.42, 0.45, { bevel: 0.16, segments: 5 }), M.slab, { name: 'pool-soffit' });
+    add(slabGeometry(offset(inner, 0.46), [], 16.4, 0.5, { bevel: 0.18, segments: 5 }), M.slab, { name: 'pool-soffit' });
   }
 
-  // --- interior: tile floor + walls with caustics ------------------------
-  const floorMat = poolFloorMaterial();
-  add(capGeometry(offset(inner, -0.005), [], 16.752, 1), floorMat, { cast: false, name: 'pool-floor' });
-  const wallStrip = stripGeometry(inner, 16.75, WATER_Z, { closed: true });
-  const wallMesh = add(wallStrip, floorMat, { cast: false, name: 'pool-walls' });
-  wallMesh.material = floorMat.clone();
-  wallMesh.material.side = THREE.DoubleSide;
-  wallMesh.material.onBeforeCompile = floorMat.onBeforeCompile;
-  wallMesh.material.customProgramCacheKey = floorMat.customProgramCacheKey;
-  // underwater lights (warm-white niches on the north wall)
+  // --- underwater lights (in the deck-side walls) ---------------------------
+  const lights = [];
   {
-    const g = [];
-    for (const p of resample(inner.filter((_, i) => !isInfinity[i] && !isSpill[i]), 2.6)) {
-      const disc = new THREE.SphereGeometry(0.07, 12, 8);
-      disc.scale(1, 1, 0.4);
-      disc.translate(p.x, 17.45, -p.y);
-      g.push(disc);
+    const run = [];
+    for (let i = 0; i < n; i++) if (!isInfinity[i] && !isSpill[i] && knife[i] < 0.2) run.push(i);
+    let last = -1e9, acc = 0;
+    for (let j = 0; j < run.length; j++) {
+      const i = run[j];
+      if (j > 0) acc += inner[i].distanceTo(inner[run[j - 1]]);
+      if (acc - last < 3.2) continue;
+      last = acc;
+      const p = inner[i].clone().addScaledVector(normals[i], -0.03);
+      lights.push(new THREE.Vector4(p.x, WATER_Z - 0.42, -p.y, 1.0));
+      if (lights.length >= 12) break;
     }
-    if (g.length) root.add(new THREE.Mesh(merge(g), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.92, 0.8).multiplyScalar(6) })));
   }
 
   // --- water surface ------------------------------------------------------
-  const waterMat = createPoolWaterMaterial();
+  const waterMat = createPoolWaterMaterial({ outline: inner, floorY: FLOOR_Z, waterY: WATER_Z, lights });
   const water = add(capGeometry(inner, [], WATER_Z, 1), waterMat, { cast: false, receive: false, name: 'pool-water' });
-  water.renderOrder = 3;
+  water.renderOrder = 1;
 
-  // --- infinity overflow film on the outer south face ---------------------
+  // --- infinity overflow: film on the outer face + catch gutter -------------
   {
-    const outS = [];
-    for (let i = 0; i < n; i++) if (isInfinity[i]) outS.push(V2(outer[i].x, outer[i].y));
-    // order along x
-    outS.sort((a, b) => a.x - b.x);
-    const film = offsetOpenOut(outS, 0.012);
-    const g = stripGeometry(film, 17.25, WATER_Z - 0.004);
-    // uv.y should run top->bottom for the shader
-    const uvA = g.attributes.uv;
-    let L = 0;
-    for (let i = 0; i < uvA.count; i++) L = Math.max(L, uvA.getX(i));
-    for (let i = 0; i < uvA.count; i++) uvA.setXY(i, uvA.getX(i) / L, 1 - uvA.getY(i) / (WATER_Z - 17.25));
-    const m = add(g, sheetMaterial({ speed: 0.9, density: 20, opacity: 0.32, tint: [0.42, 0.56, 0.6] }), { cast: false, receive: false, name: 'infinity-film' });
-    m.renderOrder = 4;
-    // catch trough lip
-    add(sweepRect(offsetOpenOut(outS, 0.2), 17.1, 0.36, 0.15), M.slab, { name: 'catch-trough' });
-  }
-
-  // --- waterfall at the west tip ------------------------------------------
-  const dir = normals[si].clone().normalize();
-  const start = TIP.clone().addScaledVector(dir, 0.36);
-  {
-    const segs = 40;
-    const width0 = 2.6, width1 = 3.6;
-    const pos = [], uv = [], idx = [];
-    const v0 = 1.2; // m/s horizontal
-    const topY = WATER_Z, botY = 8.72;
-    const T = Math.sqrt((2 * (topY - botY)) / 9.81);
-    const side = new THREE.Vector2(-dir.y, dir.x);
-    for (let i = 0; i <= segs; i++) {
-      const t = (i / segs) * T;
-      const along = v0 * t;
-      const y = topY - 0.5 * 9.81 * t * t;
-      const w = THREE.MathUtils.lerp(width0, width1, i / segs);
-      const px = start.x + dir.x * along, py = start.y + dir.y * along;
-      const wob = Math.sin(i * 0.7) * 0.05;
-      for (const sgn of [-1, 1]) {
-        const sx = px + side.x * (w / 2) * sgn + dir.x * wob;
-        const sy = py + side.y * (w / 2) * sgn + dir.y * wob;
-        pos.push(sx, y, -sy);
-        uv.push(sgn < 0 ? 0 : 1, i / segs);
+    const runIdx = [];
+    for (let i = 0; i < n; i++) if (isInfinity[i]) runIdx.push(i);
+    runIdx.sort((a, b) => inner[a].x - inner[b].x);
+    // film profile: rolls over the knife edge, then hugs the face
+    const prof = [[-0.004, WATER_Z + 0.0008], [0.018, WATER_Z - 0.0005], [0.036, WATER_Z - 0.007], [0.047, WATER_Z - 0.024], [0.049, WATER_Z - 0.06], [0.049, GUTTER_Z + 0.004]];
+    const pos = [], uv = [], flow = [], idx = [];
+    let acc = 0;
+    runIdx.forEach((i, j) => {
+      if (j > 0) acc += inner[i].distanceTo(inner[runIdx[j - 1]]);
+      const p = inner[i], nr = normals[i];
+      for (const [o, z] of prof) {
+        pos.push(p.x + nr.x * o, z, -(p.y + nr.y * o));
+        uv.push(acc, WATER_Z - z);
+        flow.push(Math.max(0, WATER_Z - z), nr.x, -nr.y);
       }
-      if (i > 0) {
-        const a = (i - 1) * 2;
-        idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3);
+    });
+    const R = prof.length;
+    for (let j = 0; j < runIdx.length - 1; j++) {
+      for (let k = 0; k < R - 1; k++) {
+        const a = j * R + k, b = a + 1, c = a + R, d = c + 1;
+        idx.push(a, b, c, b, d, c);
       }
     }
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.setAttribute('aFlow', new THREE.Float32BufferAttribute(flow, 3));
     g.setIndex(idx);
     g.computeVertexNormals();
-    const fallMat = sheetMaterial({ speed: 1.6, density: 3.0, opacity: 0.85, tint: [0.85, 0.94, 0.95] });
-    const fall = add(g, fallMat, { cast: false, receive: false, name: 'waterfall' });
-    fall.renderOrder = 4;
-    // two more offset layers for body and spray
-    const g2 = g.clone();
-    g2.translate(dir.x * 0.1, 0, -dir.y * 0.1);
-    const fall2 = add(g2, sheetMaterial({ speed: 2.1, density: 4.5, opacity: 0.55, tint: [0.9, 0.97, 0.98] }), { cast: false, receive: false, name: 'waterfall-2' });
-    fall2.renderOrder = 4;
-    const g3 = g.clone();
-    g3.scale(1, 1, 1);
-    g3.translate(-dir.x * 0.12, 0, dir.y * 0.12);
-    const fall3 = add(g3, sheetMaterial({ speed: 1.2, density: 2.2, opacity: 0.4, tint: [0.75, 0.88, 0.9] }), { cast: false, receive: false, name: 'waterfall-3' });
-    fall3.renderOrder = 4;
-    // the notch in the rim where water leaves
-    // basin at the foot (z ~ 8.7) with foam ring
-    const bx = start.x + dir.x * v0 * T, by = start.y + dir.y * v0 * T;
-    const basin = ellipse(bx + dir.x * 0.6, by + dir.y * 0.6, 3.4, 2.6, 64, Math.atan2(dir.y, dir.x));
-    const bw = add(capGeometry(basin, [], 8.9, 1), createPoolWaterMaterial(), { cast: false, receive: false, name: 'basin-water' });
-    bw.material.uniforms = { ...bw.material.uniforms };
-    bw.renderOrder = 3;
-    const foam = new THREE.Mesh(
-      new THREE.CircleGeometry(1.8, 32).rotateX(-Math.PI / 2).translate(bx, 8.93, -by),
-      sheetMaterial({ speed: 0.5, density: 8, opacity: 0.6, tint: [0.95, 0.98, 1.0] }),
-    );
-    foam.renderOrder = 5;
-    root.add(foam);
-    // spray / mist at the plunge: soft particles
-    {
-      const c = document.createElement('canvas');
-      c.width = c.height = 64;
-      const x2 = c.getContext('2d');
-      const gr = x2.createRadialGradient(32, 32, 0, 32, 32, 32);
-      gr.addColorStop(0, 'rgba(255,255,255,0.55)');
-      gr.addColorStop(1, 'rgba(255,255,255,0)');
-      x2.fillStyle = gr;
-      x2.fillRect(0, 0, 64, 64);
-      const tex = new THREE.CanvasTexture(c);
-      const N = 90;
-      const pos = new Float32Array(N * 3);
-      let r = 7;
-      const rnd = () => ((r = (r * 16807) % 2147483647) / 2147483647);
-      for (let i = 0; i < N; i++) {
-        const a = rnd() * Math.PI * 2, rr = Math.sqrt(rnd()) * 1.8;
-        pos[i * 3] = bx + Math.cos(a) * rr;
-        pos[i * 3 + 1] = 8.8 + rnd() * rnd() * 3.2;
-        pos[i * 3 + 2] = -(by + Math.sin(a) * rr);
-      }
-      const pg = new THREE.BufferGeometry();
-      pg.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-      const mist = new THREE.Points(pg, new THREE.PointsMaterial({ map: tex, size: 1.6, sizeAttenuation: true, transparent: true, opacity: 0.35, depthWrite: false, color: new THREE.Color(0.9, 0.95, 0.97), fog: false }));
-      mist.renderOrder = 6;
-      mist.name = 'waterfall-mist';
-      root.add(mist);
-    }
-    // uplight in the basin (photo reference: lit cascade)
-    const up = new THREE.PointLight(new THREE.Color(1.0, 0.82, 0.6), 18, 14, 2);
-    up.position.set(bx + dir.x * 1.2, 9.4, -(by + dir.y * 1.2));
-    root.add(up);
+    const film = add(g, overflowFilmMaterial({ sky }), { cast: false, receive: false, name: 'infinity-film' });
+    film.renderOrder = 4;
+    // catch gutter: dark water channel and a slim outer lip
+    const path = runIdx.map((i) => inner[i]);
+    const nrm = runIdx.map((i) => normals[i]);
+    const off = (o) => path.map((p, k) => V2(p.x + nrm[k].x * o, p.y + nrm[k].y * o));
+    const strip = (o0, o1, z) => {
+      const A = off(o0), B = off(o1);
+      const ps = [], ix = [];
+      for (let k = 0; k < A.length; k++) ps.push(A[k].x, z, -A[k].y, B[k].x, z, -B[k].y);
+      for (let k = 0; k < A.length - 1; k++) { const q = k * 2; ix.push(q, q + 1, q + 2, q + 1, q + 3, q + 2); }
+      const sg = new THREE.BufferGeometry();
+      sg.setAttribute('position', new THREE.Float32BufferAttribute(ps, 3));
+      sg.setIndex(ix);
+      sg.computeVertexNormals();
+      if (sg.attributes.normal.getY(0) < 0) { for (let k = 0; k < ix.length; k += 3) { const t = ix[k + 1]; ix[k + 1] = ix[k + 2]; ix[k + 2] = t; } sg.setIndex(ix); sg.computeVertexNormals(); }
+      return sg;
+    };
+    const gutterWater = new THREE.MeshPhysicalMaterial({ name: 'gutter-water', color: new THREE.Color(0.012, 0.04, 0.05), roughness: 0.06, envMapIntensity: 1.0, clearcoat: 1, clearcoatRoughness: 0.04 });
+    add(strip(0.05, 0.43, GUTTER_Z), gutterWater, { cast: false, name: 'gutter-water' });
+    const foamLine = new THREE.MeshStandardMaterial({ name: 'gutter-foam', color: new THREE.Color(0.85, 0.9, 0.92), roughness: 0.9 });
+    add(strip(0.049, 0.085, GUTTER_Z + 0.003), foamLine, { cast: false, name: 'gutter-foam' });
+    add(sweepRect(off(0.45), 16.38, 0.06, GUTTER_Z + 0.1 - 16.38), M.slab, { name: 'gutter-lip' });
   }
+
+  // --- cascade at the west tip ----------------------------------------------
+  const cascade = buildCascade(ctx, root, {
+    tip: TIP,
+    dir: normals[si].clone(),
+    lipOffset: 0.045,
+    topZ: WATER_Z - 0.01,
+    width: 2.7,
+    sky,
+    M,
+  });
 
   // --- firepit terrace (lower, east) --------------------------------------
   const fp = FIREPIT;
@@ -471,8 +323,8 @@ export function buildPool(ctx, root, M, plan) {
     return null;
   };
 
-  const update = (t) => {
-    void t;
+  const update = (t, camera) => {
+    cascade.update(t, camera, ctx.renderer);
   };
 
   return { water: waterMat, update, colliders, walkHeight, isInside: (x, y) => pointInPoly(x, y, pool) };
