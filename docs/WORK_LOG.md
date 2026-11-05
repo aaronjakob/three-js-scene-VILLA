@@ -215,3 +215,40 @@ session): slab massing ("stacked drum"), pool basin depth/shape vs. the plan's
 crescent, a shallow atrium open to the sky (the upper floor makes it a shaft),
 a translucent multi-tier waterfall, sculpted fractured rock geometry, and a new
 high-resolution leaf painter for trailing plants.
+
+### Final set — fresh blind reviewers (all 11 views, 1920×1080, 4× supersampled)
+
+| Axis | E | F |
+|---|---|---|
+| Realism | 5.0 | 4.5 |
+| Lighting & colour | 5.0 | 5.0 |
+| Architecture | 5.5 | 5.5 |
+| Layout consistency | 7.0 | 7.5 |
+| Vegetation & water | 4.5 | 4.5 |
+| **Overall** | **5.4** | **5.4** |
+
+Progress of the blind means over this pass: 4.55 (HD checkpoint 1) → 4.8
+(checkpoint 2) → 5.4 (final set). The 9.2 target was **not** reached.
+
+Both reviewers named `hero-interior` the strongest image (closest to ref 08);
+the weakest were `aerial` (no sky, flat light, clay-like cliff) and `entry`
+(murky, foreground trees, tiled paving). Both confirmed every required
+programme element on the correct side in every view.
+
+Their shared top fixes — the honest backlog for a next pass:
+1. Cliff: real fractured rock geometry (vertical faces, ledges, crevices,
+   scree) instead of the smooth marching-cubes mass; textured ground cover.
+2. Light: a lower, warmer sun with raking shadows and interiors clearly
+   brighter than outside; clamp bloom, remove lens ghosts/god-ray streaks in
+   the sun-facing interiors (workspace, dining).
+3. Foliage: a new high-resolution painter for trailing plants (continuous
+   vines, not strings), more species and less instance repetition, better
+   indoor plants.
+4. Water: a waterfall that spills from the infinity lip with thickness, white
+   water, mist and a plunge pool; a slimmer pool basin.
+5. Atrium: an opening that reads as open sky from inside (today the upper
+   floor turns it into a white shaft).
+6. Interiors: fuller dressing (rugs, secondary seating, kitchen back wall,
+   styled shelves), ceiling material, consistent sofa colour.
+7. Detailing: glass balustrades, stair stringers, a flame that lights its
+   surroundings, untiled cobbles, distant villages beyond white cubes.
