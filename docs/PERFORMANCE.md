@@ -14,7 +14,7 @@ a default profile.
 | Build time (terrain, textures, villa, vegetation) | ~12 s on 4 CPU cores (yields to the host between stages) |
 | Scene size (round 3) | ~14.1 M triangles, ~55 k instances, ~230 geometries, ~75 programs |
 | One 640×360 still, incl. page load + build (SwiftShader) | 74–175 s (interiors fastest, sea-facing aerials slowest) |
-| One 1920×1080 still (SwiftShader) | see `renders/stats.json` |
+| Final set, 11 views at 1920×1080, 4 jittered frames each, one session (SwiftShader) | ~6 100 s total: build 112 s; per view 250 s (lounge) – 700 s (west), seaward 1 115 s (its first frame also renders the 8192² shadow map) |
 
 On a discrete GPU this triangle count is routine; the main per-frame costs are
 the planar reflection pass (second scene render at 0.5–0.6× resolution),
@@ -24,7 +24,7 @@ GTAO, and alpha-tested foliage overdraw.
 
 | Profile | Target | Pixel ratio | MSAA | Shadows | AO | Reflections | Vegetation |
 |---|---|---|---|---|---|---|---|
-| `still` | offline approval stills | 1 | 4× | 4096 | full res, 24 spp | 0.6× | 100 % |
+| `still` | offline approval stills (+ captured probes, window portals, `--aa=4` supersampling) | 1 | 4× | 8192 | full res, 24 spp | 0.6× | 100 % |
 | `high` | desktop dGPU (RTX / RX) | ≤1.5 | 4× | 4096 | 0.75×, 16 spp | 0.5× | 100 % |
 | `balanced` | iGPU (Radeon 780M, Iris Xe, Apple M) | 1 | 2× | 2048 | 0.5×, 12 spp | 0.35× | 60 % |
 | `low` | weak GPUs | 0.85 | – | 1024 | – | – | 32 % |
