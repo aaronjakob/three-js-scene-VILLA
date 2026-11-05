@@ -25,7 +25,7 @@ current view is kept in the URL hash, so back/forward and reload work.
 Render the approval stills from the live scene (headless Chromium):
 
 ```bash
-npm run stills -- --w=1920 --h=1080
+npm run stills -- --session --aa=4 --w=1920 --h=1080
 ```
 
 ## Layout

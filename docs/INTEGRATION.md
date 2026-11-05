@@ -79,10 +79,14 @@ keys 1–9, 0 and `-` and stores the view in the URL hash and `localStorage`.
 
 ## 5. Fallback stills
 
-Render the approval/fallback stills from the live scene:
+Ready-made 1920×1080 JPEGs of all 11 views ship in `public/renders/` (the demo
+serves them at `./renders/`). Copy them to wherever `fallbackBase` points.
+
+To regenerate them from the live scene (one build, every view from the same
+world, 4 jittered frames averaged per still):
 
 ```bash
-npm run stills -- --w=1920 --h=1080
+npm run stills -- --session --aa=4 --w=1920 --h=1080
 ```
 
 Convert `renders/*.png` to JPEG and serve them at `fallbackBase`. They come from
