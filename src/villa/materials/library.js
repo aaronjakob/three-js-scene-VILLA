@@ -66,7 +66,7 @@ export function materials(quality) {
     }),
     ceiling: new THREE.MeshStandardMaterial({
       name: 'plaster-ceiling',
-      color: new THREE.Color(0.80, 0.70, 0.58),
+      color: new THREE.Color(0.82, 0.77, 0.70),
       roughness: 0.92,
       envMapIntensity: 0.25,
     }),
@@ -87,9 +87,9 @@ export function materials(quality) {
     }),
     metalDark: new THREE.MeshStandardMaterial({
       name: 'bronze-charcoal',
-      color: new THREE.Color(0.10, 0.095, 0.09),
-      metalness: 0.85,
-      roughness: 0.38,
+      color: new THREE.Color(0.13, 0.11, 0.09),
+      metalness: 0.7,
+      roughness: 0.42,
       envMapIntensity: 0.9,
     }),
     brass: new THREE.MeshStandardMaterial({
@@ -193,7 +193,7 @@ export function materials(quality) {
       roughness: 0.85,
     }),
     led: new THREE.MeshBasicMaterial({ name: 'led-2700k', color: warmLED.clone().multiplyScalar(3.2) }),
-    ledSoft: new THREE.MeshBasicMaterial({ name: 'led-soft', color: warmLED.clone().multiplyScalar(1.6) }),
+    ledSoft: new THREE.MeshBasicMaterial({ name: 'led-soft', color: warmLED.clone().multiplyScalar(2.2) }),
     lampShade: new THREE.MeshStandardMaterial({
       name: 'opal-glass',
       color: 0xffffff,

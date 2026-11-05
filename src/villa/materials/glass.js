@@ -43,7 +43,8 @@ export function createGlassMaterial({ tint = 0.06, reflect = 1.0 } = {}) {
         vec3 sky;
         if (uHasEnvCube > 0.5) {
           // captured surroundings: sea, cliff, terraces, trees, sky
-          sky = textureCube(uEnvCube, R).rgb;
+          // the cube's sun is a soft, low-resolution blob: cap it so it never ghosts
+          sky = min(textureCube(uEnvCube, R).rgb, vec3(1.6));
         } else {
           sky = vh_sky(normalize(vec3(R.x, max(R.y, -0.25), R.z)), true);
           float below = smoothstep(0.02, -0.2, R.y);

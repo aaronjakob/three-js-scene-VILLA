@@ -176,7 +176,8 @@ export function buildGeology(ctx) {
   // rock outcrop beside the garden stair (entry reference)
   for (let i = 0; i < 9; i++) put(-10.2 - rng() * 2.5, 15 + i * 0.7, 17.6 + i * 0.15, 1.1 + rng() * 1.0, 0.45, 0.4);
   // near-shore stacks and islets' boulders
-  for (const [x, y, s] of [[60, -78, 5], [74, -86, 3.0], [-48, -72, 3.8], [140, -260, 7], [190, -300, 4.5], [-160, -200, 5.5]]) {
+  // (only near-shore stacks: lone boulders far out at sea have no surf and read as floating)
+  for (const [x, y, s] of [[60, -78, 5], [74, -86, 3.0], [-48, -72, 3.8]]) {
     put(x, y, field.height(x, y), s, 0.35, 0.5);
   }
 

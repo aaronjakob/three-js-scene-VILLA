@@ -507,7 +507,7 @@ export function buildInterior(ctx) {
   // ---- real lights: few, soft, 2700 K, no shadows
   if (quality.interiorLights !== false) {
     for (const [x, y, z, intensity, dist] of real) {
-      const l = new THREE.PointLight(new THREE.Color(1.0, 0.66, 0.4), intensity, dist, 2);
+      const l = new THREE.PointLight(new THREE.Color(1.0, 0.66, 0.4), intensity * 1.5, dist * 1.15, 2);
       l.position.set(x, z, -y);
       root.add(l);
     }

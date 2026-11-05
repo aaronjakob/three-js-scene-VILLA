@@ -13,7 +13,8 @@ function blade(rng, L, W, out) {
   const pos = [], nrm = [], col = [], idx = [];
   // tears: lateral splits from the margin toward the midrib
   const tears = [];
-  for (let i = 0; i < 2 + Math.floor(rng() * 5); i++) tears.push({ u: 0.18 + rng() * 0.75, side: rng() < 0.5 ? -1 : 1, depth: 0.45 + rng() * 0.5 });
+  // (grid-cell tears read as square holes at this mesh density: leaves stay whole)
+  for (let i = 0; i < 0; i++) tears.push({ u: 0.18 + rng() * 0.75, side: rng() < 0.5 ? -1 : 1, depth: 0.45 + rng() * 0.5 });
   const curl = 0.12 + rng() * 0.12;
   for (let i = 0; i <= nu; i++) {
     const u = i / nu;
@@ -71,7 +72,7 @@ function petiole(start, end, r0, r1, out) {
 
 export function buildIndoorPlants(root, quality) {
   const M = materials(quality);
-  const leafMat = new THREE.MeshPhysicalMaterial({ name: 'strelitzia', vertexColors: true, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.3, side: THREE.DoubleSide, envMapIntensity: 0.6 });
+  const leafMat = new THREE.MeshPhysicalMaterial({ name: 'strelitzia', vertexColors: true, roughness: 0.5, clearcoat: 0.1, clearcoatRoughness: 0.4, side: THREE.DoubleSide, envMapIntensity: 0.45 });
   const spots = [[-12.6, -2.6, 1.0], [-1.6, -7.2, 0.9], [11.6, -3.6, 1.0], [-15.9, 0.0, 0.9], [4.0, 4.4, 0.85], [16.9, 2.4, 0.95], [-7.6, 3.9, 0.8]];
   const leaves = [], pots = [];
   const rng = mulberry32(31337);

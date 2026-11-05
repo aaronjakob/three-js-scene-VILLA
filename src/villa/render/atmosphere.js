@@ -51,7 +51,7 @@ vec3 vh_skyBase(vec3 d) {
   col += sunTint * (pow(muc, 7.0) * 0.30 * (0.30 + 0.70 * horizonW));
   col += sunTint * pow(muc, 64.0) * 0.35;
   col += vec3(1.0, 0.93, 0.80) * pow(muc, 900.0) * 1.0;
-  col += vec3(1.0, 0.90, 0.62) * smoothstep(0.99994, 0.99997, mu) * 12.0;
+  col += vec3(1.0, 0.86, 0.55) * smoothstep(0.99994, 0.99997, mu) * 6.0;
   // very subtle warm band hugging the horizon all around the sun side
   col = mix(col, vec3(0.95, 0.90, 0.80), exp(-hp * 45.0) * (0.15 + 0.35 * pow(mu * 0.5 + 0.5, 4.0)));
   // anti-solar side slightly cooler/pinker-free blue
@@ -98,7 +98,7 @@ vec3 vh_sky(vec3 d, bool withSun) {
   if (!withSun) {
     float mu = dot(dir, uSunDir);
     col -= vec3(1.0, 0.93, 0.80) * pow(max(mu, 0.0), 900.0) * 1.0;
-    col -= vec3(1.0, 0.90, 0.62) * smoothstep(0.99994, 0.99997, mu) * 12.0;
+    col -= vec3(1.0, 0.86, 0.55) * smoothstep(0.99994, 0.99997, mu) * 6.0;
   }
   vec4 cl = vh_clouds(dir);
   // the low sun sits in a clear gap: clouds thin out around the disc
