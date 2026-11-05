@@ -125,10 +125,16 @@ export function buildPool(ctx, root, M, plan) {
       envMapIntensity: 0.9,
     });
     add(face, [M.slab, wetStone], { name: 'pool-overflow-face' });
+    // the basin itself is clad in weathered travertine, not white render: from
+    // the sea it reads as a stone plinth growing out of the cliff (ref 01)
+    const shell = M.travertineWall.clone();
+    shell.name = 'pool-shell-travertine';
+    shell.color = new THREE.Color(0.8, 0.76, 0.7);
+    shell.roughness = 0.8;
     const lower = merge([ringStrip(rings, 4, 5, n), ringStrip(rings, 5, 6, n), ringStrip(rings, 6, 0, n)]);
-    add(lower, M.slab, { name: 'pool-tub' });
+    add(lower, shell, { name: 'pool-tub' });
     // sculpted soffit under the cantilever
-    add(slabGeometry(offset(inner, 0.46), [], 16.4, 0.5, { bevel: 0.18, segments: 5 }), M.slab, { name: 'pool-soffit' });
+    add(slabGeometry(offset(inner, 0.46), [], 16.4, 0.5, { bevel: 0.18, segments: 5 }), shell, { name: 'pool-soffit' });
   }
 
   // --- underwater lights (in the deck-side walls) ---------------------------

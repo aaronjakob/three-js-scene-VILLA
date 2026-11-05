@@ -335,20 +335,25 @@ export function buildVegetation(ctx) {
 
   // --- cascades from slab edges: bougainvillea / jasmine, 0.5-2.5 m ----------
   const cascades = [];
-  for (let i = 0; i < 12; i++) cascades.push(makeCascade(900 + i, 0.6 + (i % 6) * 0.38, i % 3 === 0 ? 'boug' : i % 3 === 1 ? 'mix' : 'green'));
+  // mostly green trailing plants with occasional bougainvillea drifts (ref 01)
+  for (let i = 0; i < 12; i++) cascades.push(makeCascade(900 + i, 0.6 + (i % 6) * 0.38, i % 6 === 0 ? 'boug' : i % 6 === 3 ? 'mix' : 'green'));
   const cascShort = [];
-  for (let i = 0; i < 6; i++) cascShort.push(makeCascade(950 + i, 0.4 + (i % 3) * 0.25, i % 2 ? 'green' : 'mix'));
+  for (let i = 0; i < 6; i++) cascShort.push(makeCascade(950 + i, 0.4 + (i % 3) * 0.25, i % 3 === 0 ? 'mix' : 'green'));
+  // the atrium is planted with green trailing plants only (ref 05)
+  const cascGreen = [];
+  for (let i = 0; i < 6; i++) cascGreen.push(makeCascade(970 + i, 0.5 + (i % 3) * 0.45, 'green'));
   const vineAlong = (outline, z, inset, step, skip, set, keyPrefix, thresh = 0.12) => {
     const pts = resample([...outline, outline[0]], step);
     for (let i = 0; i < pts.length - 1; i++) {
       const p = pts[i], q = pts[i + 1];
       if (skip && skip(p)) continue;
-      const cluster = nz.fbm2(p.x / 5.5, p.y / 5.5, 2);
+      // large-scale clump field so cascades come in irregular drifts, not a fringe
+      const cluster = nz.fbm2(p.x / 8.5, p.y / 8.5, 2) + 0.35 * nz.fbm2(p.x / 2.6 + 7.1, p.y / 2.6, 1);
       if (cluster < thresh) continue;
       const t = new THREE.Vector2().subVectors(q, p).normalize();
       const out = new THREE.Vector2(t.y, -t.x);
       // clustered: 1-3 overlapping cascades per edge point where the field is high
-      const nC = 1 + Math.floor(Math.max(0, cluster - thresh) * 6 * rng() + rng() * 1.2);
+      const nC = 1 + Math.floor(Math.max(0, cluster - thresh) * 4 * rng() + rng() * 0.8);
       for (let c = 0; c < nC; c++) {
         const vi = Math.floor(rng() * set.length);
         const along = (rng() - 0.5) * step;
@@ -367,15 +372,79 @@ export function buildVegetation(ctx) {
     }
   };
   let lenK = 1.15;
-  vineAlong(l1, LEVEL.upper + 0.12, 0.05, 0.55, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11), cascades, 'casc', -0.08);
-  vineAlong(roof, LEVEL.roof + 0.2, 0.05, 0.5, (p) => p.y > 3.5, cascades, 'casc', -0.08);
+  vineAlong(l1, LEVEL.upper + 0.12, 0.05, 0.6, (p) => p.y > 3.5 && !(p.x > -3 && p.x < 9 && p.y > 11), cascades, 'casc', 0.2);
+  vineAlong(roof, LEVEL.roof + 0.2, 0.05, 0.6, (p) => p.y > 3.5, cascades, 'casc', 0.26);
   lenK = 1;
   // into the atrium (seen from the living room)
   const shaftRing = ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx - 0.04, ATRIUM.ry - 0.04, 64, ATRIUM.rot)).reverse();
-  vineAlong(shaftRing, LEVEL.upper - 0.6, -0.05, 0.55, null, cascShort, 'cascS', 0.0);
-  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, -0.08, 0.5, null, cascades, 'cascA', 0.05);
+  // only a few sprigs at the oculus rim: it sits close to the living-room lenses
+  vineAlong(shaftRing, LEVEL.upper - 0.6, 0.05, 1.1, null, cascGreen, 'cascG', 0.45);
+  // shaft ring is clockwise, so `out` points into the shaft: keep the planting inside the wall
+  for (const z of [LEVEL.roof + 0.25, 27.0, 25.7, 24.4]) vineAlong(shaftRing, z, 0.06, 0.55, null, cascGreen, 'cascA', 0.05);
   // the roof lip around the opening spills greenery into the shaft
-  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, cascShort, 'cascS', -0.05);
+  vineAlong(ccw(ellipse(ATRIUM.cx, ATRIUM.cy, ATRIUM.rx + 0.5, ATRIUM.ry + 0.5, 64, ATRIUM.rot)).reverse(), LEVEL.roof + 0.62, -0.1, 0.5, null, cascGreen, 'cascR', -0.05);
+
+  // --- cliff benches: maquis, rosemary, grasses and trailing green on the ledges
+  // of the limestone cliff (refs 01/03/04: the rock is never bare). Seated on the
+  // real cliff surface, not the terrain under it. Runs last so the rest of the
+  // planting keeps its layout.
+  const geo = ctx.geology;
+  if (geo?.surfaceHeight && geo.cliff?.inZone) {
+    const sh = geo.surfaceHeight;
+    const wf = geo.cliff.waterfall;
+    const nearFall = (x, y) => {
+      if (!wf) return false;
+      const ax = wf.start.x, ay = wf.start.y, bx = wf.basinC.x, by = wf.basinC.y;
+      const vx = bx - ax, vy = by - ay;
+      const t = Math.max(0, Math.min(1, ((x - ax) * vx + (y - ay) * vy) / (vx * vx + vy * vy)));
+      return Math.hypot(x - ax - vx * t, y - ay - vy * t) < 3.2 || Math.hypot(x - bx, y - by) < 4.4;
+    };
+    const LEDGE = ['lentisk', 'lentisk', 'myrtle', 'rosemary', 'rosemary', 'grassB', 'grassB', 'grassA', 'cushion', 'ivy', 'broad', 'flowersW', 'lavender', 'myrtle'];
+    const dirs = [[0, -1], [0.7, -0.7], [-0.7, -0.7], [1, 0], [-1, 0]];
+    const N = Math.round(16000 * density);
+    for (let i = 0; i < N; i++) {
+      const x = -47 + rng() * 94;
+      const y = -5 - rng() * 58;
+      if (!geo.cliff.inZone(x, y) || blocked(x, y) || nearFall(x, y)) continue;
+      const z = sh(x, y);
+      if (z == null || z < 1.8) continue; // above the splash zone
+      const e = 0.45;
+      const zx0 = sh(x - e, y), zx1 = sh(x + e, y), zy0 = sh(x, y - e), zy1 = sh(x, y + e);
+      if (zx0 == null || zx1 == null || zy0 == null || zy1 == null) continue;
+      const sl = Math.hypot(zx1 - zx0, zy1 - zy0) / (2 * e);
+      if (sl > 0.8) continue; // benches and ledges only, never stuck on a wall
+      // drifts: plants gather in the cracks and on wider benches
+      const clump = nz.fbm2(x / 5.5 + 3.1, y / 5.5, 2) + 0.4 * nz.fbm2(x / 1.7, y / 1.7 + 9.3, 1);
+      if (blocksSightline(x, y, z, 2.2, 13)) {
+        // in front of an eye-level lens: a low, dense garden bed, never bare rock cover
+        if (clump > -0.45) placeShrub(['grassA', 'grassB', 'lavender', 'lavender', 'rosemary', 'flowersW', 'flowersP'][Math.floor(rng() * 7)], x, y, z, 0.4 + rng() * 0.32);
+        continue;
+      }
+      if (clump < -0.08) continue;
+      const q = rng();
+      if (q < 0.04) placeAgave(x, y, z, 0.6 + rng() * 0.5);
+      else placeShrub(LEDGE[Math.floor(rng() * LEDGE.length)], x, y, z, (0.55 + rng() * 0.65) * (sl > 0.5 ? 0.8 : 1));
+      // at a ledge lip, green trails spill over the drop
+      if (rng() < 0.3) {
+        let best = null, drop = 1.4;
+        for (const [ux, uy] of dirs) {
+          const zz = sh(x + ux * 1.0, y + uy * 1.0);
+          if (zz != null && z - zz > drop) { drop = z - zz; best = [ux, uy]; }
+        }
+        if (best) {
+          const vi = Math.floor(rng() * cascGreen.length);
+          const yaw = Math.atan2(best[0], -best[1]) + (rng() - 0.5) * 0.4;
+          const m = new THREE.Matrix4().compose(
+            new THREE.Vector3(x + best[0] * 0.35, z + 0.05, -(y + best[1] * 0.35)),
+            new THREE.Quaternion().setFromEuler(new THREE.Euler(0, yaw, 0)),
+            new THREE.Vector3(1.0 + rng() * 0.5, Math.min(drop * 0.6, 0.8 + rng() * 1.2), 1),
+          );
+          const g = 0.88 + rng() * 0.16;
+          push(`cascL-${vi}`, cascGreen[vi], leafMat, m, new THREE.Color(g, g * (0.98 + rng() * 0.06), g * (0.88 + rng() * 0.1)), false, true);
+        }
+      }
+    }
+  }
 
   // --- build instanced meshes -------------------------------------------------
   const tmpCol = new THREE.Color();

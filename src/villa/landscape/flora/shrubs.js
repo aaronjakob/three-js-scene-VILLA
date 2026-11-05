@@ -75,7 +75,7 @@ export function makeCascade(seed, len, flavour = 'mix') {
   const W = 0.9 + rng() * 0.8;
   const pick = () => {
     const r = rng();
-    if (flavour === 'green') return r < 0.6 ? 'strand' : 'jasmine';
+    if (flavour === 'green') return r < 0.82 ? 'strand' : 'jasmine';
     if (flavour === 'boug') return r < 0.55 ? 'bougA' : r < 0.8 ? 'bougB' : 'strand';
     return r < 0.3 ? 'bougA' : r < 0.42 ? 'bougB' : r < 0.7 ? 'jasmine' : 'strand';
   };

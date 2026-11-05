@@ -127,6 +127,16 @@ float vh_interiorK(vec3 w) {
     float e = length((g - vec2(-0.5, 1.6)) / vec2(16.5, 8.2));
     k = mix(0.35, 1.0, smoothstep(0.6, 1.0, e));
   }
+  // atrium shaft: open to the sky through the oculus, so its walls and planting
+  // see daylight from above (more of it the higher up the shaft)
+  if (w.y > 21.9 && w.y < 29.5) {
+    vec2 d = g - vec2(-4.1, -0.6);
+    float cr = cos(0.1), sr = sin(0.1);
+    vec2 q = vec2(cr * d.x + sr * d.y, -sr * d.x + cr * d.y);
+    float ea = length(q / vec2(3.75, 2.5));
+    float ks = mix(0.88, 1.0, smoothstep(22.2, 27.8, w.y));
+    k = max(k, mix(ks, k, smoothstep(0.96, 1.08, ea)));
+  }
   return k;
 }
 
