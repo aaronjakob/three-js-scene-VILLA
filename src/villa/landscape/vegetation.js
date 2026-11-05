@@ -26,6 +26,9 @@ function blocksSightline(x, y, z, height = 8, near = 26) {
     const dx = x - a[0], dy = y - a[1];
     const dd = Math.hypot(dx, dy);
     if (dd < near && (dx * fx + dy * fy) > 0 && z + height > a[2] - 9) return true;
+    // elevated lenses look steeply down: clear the canopy right below/in front too
+    const lift = a[2] - z;
+    if (height > 3 && lift > 14 && dd < 18 + lift * 0.9 && (dx * fx + dy * fy) > -0.2 * dd * Math.hypot(fx, fy)) return true;
     const ex = b[0] - a[0], ey = b[1] - a[1];
     const L2 = ex * ex + ey * ey;
     let t = ((x - a[0]) * ex + (y - a[1]) * ey) / L2;
@@ -168,7 +171,11 @@ export function buildVegetation(ctx) {
       if (nearSea && sp !== 'pine' && sp !== 'aleppo') continue;
       placeTree(sp, x, y, h, 0.75 + rng() * 0.5);
     } else if (r < 0.92) {
-      if (blocksSightline(x, y, h, 2.2, 13)) continue;
+      if (blocksSightline(x, y, h, 2.2, 13)) {
+        // close to a lens: low, soft foreground planting instead of bare ground
+        if (rng() < 0.85) placeShrub(['grassA', 'grassB', 'lavender', 'rosemary', 'flowersW', 'flowersP'][Math.floor(rng() * 6)], x, y, h, 0.45 + rng() * 0.3);
+        continue;
+      }
       // steep ground: low rosemary / grasses; flats: lentisk & myrtle masses
       const kind = slope > 0.45 ? (rng() < 0.5 ? 'rosemary' : 'grassB') : MAQUIS[Math.floor(rng() * MAQUIS.length)];
       placeShrub(kind, x, y, h, (0.75 + rng() * 0.75) * (slope > 0.45 ? 0.85 : 1.1) * (viewCorridor ? 0.8 : 1));
@@ -188,6 +195,28 @@ export function buildVegetation(ctx) {
     const q = rng();
     const sp = h < 30 ? (q < 0.45 ? 'pine' : q < 0.65 ? 'aleppo' : 'oak') : q < 0.25 ? 'pine' : 'oak';
     placeTree(sp, x, y, h, 0.85 + rng() * 0.5, 2);
+  }
+
+  // --- foreground planting for eye-level exterior lenses -----------------------
+  // (architectural photographers frame with low planting, never bare ground)
+  for (const v of VIEWS) {
+    if (v.interior) continue;
+    const [cx, cy, cz] = v.position;
+    const g0 = field.height(cx, cy);
+    if (cz - g0 > 6) continue;
+    const dx = v.target[0] - cx, dy = v.target[1] - cy;
+    const L = Math.hypot(dx, dy) || 1;
+    const ux = dx / L, uy = dy / L;
+    for (let i = 0; i < 260; i++) {
+      const d = 2.2 + rng() * 11;
+      const lat = (rng() * 2 - 1) * d * 0.8;
+      const x = cx + ux * d - uy * lat, y = cy + uy * d + ux * lat;
+      if (blocked(x, y)) continue;
+      const h = field.height(x, y);
+      if (h < 1 || Math.abs(h - g0) > 3) continue;
+      const kind = ['grassA', 'grassB', 'lavender', 'lavender', 'rosemary', 'flowersW', 'flowersP', 'myrtle'][Math.floor(rng() * 8)];
+      placeShrub(kind, x, y, h, (0.38 + rng() * 0.32) * (d < 5 ? 0.8 : 1));
+    }
   }
 
   // --- curated planting near the house ---------------------------------------

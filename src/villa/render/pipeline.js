@@ -178,8 +178,8 @@ export class Pipeline {
 
     this.grade = {
       exposure: 1.6,
-      saturation: 1.1,
-      contrast: 0.14,
+      saturation: 1.15,
+      contrast: 0.18,
       lift: new THREE.Vector3(0.006, 0.004, 0.0),
       gain: new THREE.Vector3(1.04, 1.0, 0.93),
       vignette: 0.16,

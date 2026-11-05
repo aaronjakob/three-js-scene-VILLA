@@ -22,12 +22,12 @@ const EYE = 18 + 1.62;
 export const VIEWS = [
   {
     id: 'aerial',
-    ev: 0.15,
+    ev: 0.0,
     key: '1',
     label: 'Seaward aerial',
     manifest: '01_Exterior_Aerial_Master (reframed: W vantage so pool, waterfall, firepit, sea + SE skyline share one frame)',
-    position: [-58, -12, 42],
-    target: [12, -26, 10],
+    position: [-58, -16, 40],
+    target: [6, -12, 13],
     fov: 42,
   },
   {
@@ -42,7 +42,7 @@ export const VIEWS = [
   },
   {
     id: 'entry',
-    ev: 0.6,
+    ev: 0.4,
     key: '3',
     label: 'North entry',
     manifest: '03_Exterior_Land_Entrance',
@@ -52,7 +52,7 @@ export const VIEWS = [
   },
   {
     id: 'west',
-    ev: 0.5,
+    ev: 0.15,
     key: '4',
     label: 'West waterfall',
     manifest: '04_Exterior_West_Waterfall',
@@ -62,7 +62,7 @@ export const VIEWS = [
   },
   {
     id: 'east',
-    ev: 0.25,
+    ev: 0.15,
     key: '5',
     label: 'East firepit',
     manifest: '05_Exterior_East_Firepit',
@@ -112,12 +112,12 @@ export const VIEWS = [
   },
   {
     id: 'hero-interior',
-    ev: -0.1,
+    ev: -0.15,
     key: '0',
     label: 'Living to sea',
     manifest: 'extra hero',
-    position: [-4.2, 3.0, EYE],
-    target: [8.5, -14.5, 18.5],
+    position: [-3.4, 3.4, EYE],
+    target: [-6.6, -15.6, 18.6],
     fov: 52,
     interior: true,
   },

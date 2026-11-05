@@ -57,10 +57,10 @@ GrSurf gr_limestone(vec3 p, vec3 n, float zs, float hard, float ao, float sh, fl
   // large tone fields: warm grey <-> ochre <-> cool grey
   float t1 = vh_fbm3(p * 0.045 + vec3(3.1, 0.0, 1.7), 3);
   float t2 = vh_fbm3(p * 0.16 + vec3(0.0, 5.0, 2.0), 3);
-  vec3 warm = vec3(0.232, 0.212, 0.185);
-  vec3 ochre = vec3(0.245, 0.188, 0.128);
-  vec3 cool = vec3(0.188, 0.186, 0.180);
-  vec3 pale = vec3(0.300, 0.287, 0.258);
+  vec3 warm = vec3(0.196, 0.178, 0.152);
+  vec3 ochre = vec3(0.210, 0.158, 0.104);
+  vec3 cool = vec3(0.156, 0.154, 0.150);
+  vec3 pale = vec3(0.252, 0.240, 0.214);
   vec3 c = mix(warm, cool, smoothstep(-0.25, 0.3, t1));
   c = mix(c, ochre, smoothstep(0.05, 0.45, t2 - t1 * 0.5) * 0.75);
   // bedding: tone per bed (1D noise along the strata coordinate)
